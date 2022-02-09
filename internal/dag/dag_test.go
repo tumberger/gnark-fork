@@ -1,6 +1,7 @@
 package dag
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -123,4 +124,24 @@ func TestDAGReductionFork(t *testing.T) {
 	assert.Equal(D, dag.children[B][0])
 	assert.Equal(D, dag.children[C][0])
 	assert.Equal(E, dag.children[D][0])
+}
+
+func BenchmarkDAGReduction(b *testing.B) {
+	rand.Seed(42)
+	const nbNodes = 100000
+	parents := make([]int, 0, nbNodes)
+	for i := 0; i < b.N; i++ {
+		dag := New(nbNodes)
+		for j := 0; j < nbNodes/1000; j++ {
+			dag.AddNode() // initial nodes
+		}
+		for j := nbNodes / 1000; j < nbNodes; j++ {
+			parents = parents[:0]
+			for k := 0; k < 10; k++ {
+				parents = append(parents, rand.Intn(j-1))
+			}
+			dag.AddNode()
+			dag.AddEdges(j, parents)
+		}
+	}
 }
