@@ -124,6 +124,29 @@ func TestDAGReductionFork(t *testing.T) {
 	assert.Equal(D, dag.children[B][0])
 	assert.Equal(D, dag.children[C][0])
 	assert.Equal(E, dag.children[D][0])
+
+	// Check that levels are coherent
+	levels := dag.Levels()
+
+	// we should have 3 levels:
+	// [A,B,C]
+	// [D]
+	// [E]
+	assert.Equal(3, len(levels))
+	assert.Equal(3, len(levels[0]))
+	assert.Equal(1, len(levels[1]))
+	assert.Equal(1, len(levels[2]))
+
+	// level 0
+	assert.Equal(A, levels[0][0])
+	assert.Equal(B, levels[0][1])
+	assert.Equal(C, levels[0][2])
+
+	// level 1
+	assert.Equal(D, levels[1][0])
+
+	// level 2
+	assert.Equal(E, levels[2][0])
 }
 
 func BenchmarkDAGReduction(b *testing.B) {

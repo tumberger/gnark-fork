@@ -56,6 +56,85 @@ func (dag *DAG) AddEdges(n int, parents []int) {
 
 }
 
+// Levels returns a list of level. For each level l, it is guaranteed that all dependencies
+// of the nodes in l are in previous levels
+func (dag *DAG) Levels() [][]int {
+	// tag the nodes per levels
+	capacity := len(dag.children)
+	current := make([]int, 0, capacity/2)
+	next := make([]int, 0, capacity/2)
+	solved := make([]bool, capacity)
+
+	var levels [][]int
+
+	// find the entry nodes: the ones without parents
+	for n, p := range dag.parents {
+		if len(p) == 0 {
+			next = append(next, n)
+			solved[n] = true // mark this node as solved
+			// push the childs to current
+			current = append(current, dag.children[n]...)
+		}
+	}
+	levels = append(levels, make([]int, len(next)))
+	copy(levels[0], next)
+	sort.Ints(levels[0])
+
+	level := 0
+
+	// we use visited to tag nodes visited per level
+	// we set visited[n] = l if we visited n at level l
+	// we don't clear the memory between levels.
+	for i := 0; i < len(dag.visited); i++ {
+		dag.visited[i] = 0
+	}
+
+	for {
+		next = next[:0]
+		if len(current) == 0 {
+			break // we're done
+		}
+
+		level++
+		levels = append(levels, make([]int, 0, len(current)))
+		for i := 0; i < len(current); i++ {
+			n := current[i]
+
+			// check if we visited this node.
+			if dag.visited[n] == level {
+				continue
+			}
+			dag.visited[n] = level
+
+			// if all dependencies of n are solved, we add it to current level.
+			unsolved := false
+			for _, j := range dag.parents[n] {
+				if !solved[j] {
+					unsolved = true
+					break
+				}
+			}
+			if unsolved {
+				// add it to next
+				next = append(next, n)
+				continue
+			}
+
+			// all dependencies are solved, we add it to this level and push its chidren to the next
+			levels[level] = append(levels[level], n)
+			next = append(next, dag.children[n]...)
+
+		}
+		// mark level as solved
+		sort.Ints(levels[level])
+		for _, n := range levels[level] {
+			solved[n] = true
+		}
+		current, next = next, current
+	}
+	return levels
+}
+
 func (dag *DAG) removeTransitivity(n int, set []int) []int {
 	// n > (s in set) ; n is the most recent node, so the one that can't be others ancestors
 	// n is not in set
