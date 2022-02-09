@@ -18,6 +18,7 @@ package r1cs
 
 import (
 	"github.com/consensys/gnark-crypto/ecc"
+	"github.com/consensys/gnark/debug"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/schema"
 	bls12377r1cs "github.com/consensys/gnark/internal/backend/bls12-377/cs"
@@ -27,6 +28,7 @@ import (
 	bw6633r1cs "github.com/consensys/gnark/internal/backend/bw6-633/cs"
 	bw6761r1cs "github.com/consensys/gnark/internal/backend/bw6-761/cs"
 	"github.com/consensys/gnark/internal/backend/compiled"
+	"github.com/consensys/gnark/internal/dag"
 )
 
 // Compile constructs a rank-1 constraint sytem
@@ -129,6 +131,9 @@ HINTLOOP:
 		}
 	}
 
+	// build levels
+	res.Levels = buildLevels(res)
+
 	switch cs.CurveID {
 	case ecc.BLS12_377:
 		return bls12377r1cs.NewR1CS(res, cs.Coeffs), nil
@@ -145,6 +150,71 @@ HINTLOOP:
 	default:
 		panic("not implemtented")
 	}
+}
+
+func buildLevels(ccs compiled.R1CS) [][]int {
+	// Build DAG + levels
+	dag := dag.New(len(ccs.Constraints))
+
+	nbInputs := ccs.NbPublicVariables + ccs.NbSecretVariables
+
+	mWires := make(map[int]int, ccs.NbInternalVariables) // at which node we resolved which wire.
+	dependencies := make([]int, 0, len(ccs.Constraints)) // collect constraint dependencies
+
+	for cID, c := range ccs.Constraints {
+		// clear dependencies
+		dependencies = dependencies[:0]
+
+		// nodeID == cID here
+		nodeID := dag.AddNode()
+		if debug.Debug {
+			// TODO @gbotrel too hacky.
+			if nodeID != cID {
+				panic("nodeID doesn't match constraint ID")
+			}
+		}
+
+		processLE := func(l compiled.LinearExpression) {
+			for _, t := range l {
+				wID := t.WireID()
+				if wID < nbInputs {
+					// it's a input, we ignore it
+					continue
+				}
+
+				// if we know a which constraint solves this wire, then it's a dependency
+				n, ok := mWires[wID]
+				if ok {
+					if n != nodeID { // can happen with hints...
+						dependencies = append(dependencies, n)
+					}
+					continue
+				}
+
+				// check if it's a hint and mark all the output wires
+				if h, ok := ccs.MHints[wID]; ok {
+					for _, hwid := range h.Wires {
+						mWires[hwid] = nodeID
+					}
+					continue
+				}
+
+				// mark this wire solved by current node
+				mWires[wID] = nodeID
+			}
+		}
+
+		processLE(c.L.LinExp)
+		processLE(c.R.LinExp)
+		processLE(c.O.LinExp)
+
+		// note: if len(dependencies) == 0 --> it's an entry node
+		if len(dependencies) != 0 {
+			dag.AddEdges(nodeID, dependencies)
+		}
+	}
+
+	return dag.Levels()
 }
 
 func (cs *r1CS) SetSchema(s *schema.Schema) {
