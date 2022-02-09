@@ -63,15 +63,15 @@ func TestDAGReductionFork(t *testing.T) {
 	assert := require.New(t)
 
 	// we start with this
-	// ┌───────D◄────┐
-	// │       ▲     │
-	// │       │     │
-	// │ A     B     C
-	// │ │     │     │
-	// │ │     ▼     │
-	// │ └────►E ◄───┘
-	// │       ▲
-	// └───────┘
+	// ┌─────D◄───┐
+	// │     ▲    │
+	// │     │    │
+	// │ A   B    C
+	// │ │   │    │
+	// │ │   ▼    │
+	// │ └──►E ◄──┘
+	// │     ▲
+	// └─────┘
 	const (
 		A = iota
 		B

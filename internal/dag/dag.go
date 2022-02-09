@@ -2,6 +2,8 @@ package dag
 
 import (
 	"sort"
+
+	"github.com/consensys/gnark/debug"
 )
 
 type DAG struct {
@@ -132,6 +134,16 @@ func (dag *DAG) Levels() [][]int {
 		}
 		current, next = next, current
 	}
+
+	// sanity check
+	if debug.Debug {
+		for i := 0; i < len(solved); i++ {
+			if !solved[i] {
+				panic("a node missing from level clustering")
+			}
+		}
+	}
+
 	return levels
 }
 
