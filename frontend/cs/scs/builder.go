@@ -42,17 +42,40 @@ import (
 	bw6761r1cs "github.com/consensys/gnark/internal/backend/bw6-761/cs"
 	"github.com/consensys/gnark/internal/utils"
 	"github.com/consensys/gnark/logger"
+
+	fr_bls12377 "github.com/consensys/gnark-crypto/ecc/bls12-377/fr"
+	fr_bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
+	fr_bls24315 "github.com/consensys/gnark-crypto/ecc/bls24-315/fr"
+	fr_bn254 "github.com/consensys/gnark-crypto/ecc/bn254/fr"
+	fr_bw6633 "github.com/consensys/gnark-crypto/ecc/bw6-633/fr"
+	fr_bw6761 "github.com/consensys/gnark-crypto/ecc/bw6-761/fr"
 )
 
 func NewBuilder(curve ecc.ID, config frontend.CompileConfig) (frontend.Builder, error) {
-	return newBuilder(curve, config), nil
+	switch curve {
+	case ecc.BLS12_377:
+		return newBuilder[fr_bls12377.Element](curve, config), nil
+	case ecc.BLS12_381:
+		return newBuilder[fr_bls12381.Element](curve, config), nil
+	case ecc.BLS24_315:
+		return newBuilder[fr_bls24315.Element](curve, config), nil
+	case ecc.BN254:
+		return newBuilder[fr_bn254.Element](curve, config), nil
+	case ecc.BW6_633:
+		return newBuilder[fr_bw6633.Element](curve, config), nil
+	case ecc.BW6_761:
+		return newBuilder[fr_bw6761.Element](curve, config), nil
+	default:
+		panic("not implemented")
+	}
+
 }
 
-type scs struct {
+type scs[E any, ptE cs.Element[E]] struct {
 	compiled.ConstraintSystem
 	Constraints []compiled.SparseR1C
 
-	st     cs.CoeffTable
+	st     cs.CoeffTable[E, ptE]
 	config frontend.CompileConfig
 
 	// map for recording boolean constrained variables (to not constrain them twice)
@@ -61,16 +84,16 @@ type scs struct {
 
 // initialCapacity has quite some impact on frontend performance, especially on large circuits size
 // we may want to add build tags to tune that
-func newBuilder(curveID ecc.ID, config frontend.CompileConfig) *scs {
-	system := scs{
+func newBuilder[E any, ptE cs.Element[E]](curveID ecc.ID, config frontend.CompileConfig) *scs[E, ptE] {
+	system := scs[E, ptE]{
 		ConstraintSystem: compiled.ConstraintSystem{
 			MDebug:             make(map[int]int),
 			MHints:             make(map[int]*compiled.Hint),
 			MHintsDependencies: make(map[hint.ID]string),
 		},
+		st:          cs.NewCoeffTable[E, ptE](),
 		mtBooleans:  make(map[int]struct{}),
 		Constraints: make([]compiled.SparseR1C, 0, config.Capacity),
-		st:          cs.NewCoeffTable(),
 		config:      config,
 	}
 
@@ -84,7 +107,7 @@ func newBuilder(curveID ecc.ID, config frontend.CompileConfig) *scs {
 
 // addPlonkConstraint creates a constraint of the for al+br+clr+k=0
 //func (system *SparseR1CS) addPlonkConstraint(l, r, o frontend.Variable, cidl, cidr, cidm1, cidm2, cido, k int, debugID ...int) {
-func (system *scs) addPlonkConstraint(l, r, o compiled.Term, cidl, cidr, cidm1, cidm2, cido, k int, debugID ...int) {
+func (system *scs[E, ptE]) addPlonkConstraint(l, r, o compiled.Term, cidl, cidr, cidm1, cidm2, cido, k int, debugID ...int) {
 
 	if len(debugID) > 0 {
 		system.MDebug[len(system.Constraints)] = debugID[0]
@@ -105,21 +128,21 @@ func (system *scs) addPlonkConstraint(l, r, o compiled.Term, cidl, cidr, cidm1, 
 
 // newInternalVariable creates a new wire, appends it on the list of wires of the circuit, sets
 // the wire's id to the number of wires, and returns it
-func (system *scs) newInternalVariable() compiled.Term {
+func (system *scs[E, ptE]) newInternalVariable() compiled.Term {
 	idx := system.NbInternalVariables + system.NbPublicVariables + system.NbSecretVariables
 	system.NbInternalVariables++
 	return compiled.Pack(idx, compiled.CoeffIdOne, schema.Internal)
 }
 
 // AddPublicVariable creates a new Public Variable
-func (system *scs) AddPublicVariable(name string) frontend.Variable {
+func (system *scs[E, ptE]) AddPublicVariable(name string) frontend.Variable {
 	idx := len(system.Public)
 	system.Public = append(system.Public, name)
 	return compiled.Pack(idx, compiled.CoeffIdOne, schema.Public)
 }
 
 // AddSecretVariable creates a new Secret Variable
-func (system *scs) AddSecretVariable(name string) frontend.Variable {
+func (system *scs[E, ptE]) AddSecretVariable(name string) frontend.Variable {
 	idx := len(system.Secret) + system.NbPublicVariables
 	system.Secret = append(system.Secret, name)
 	return compiled.Pack(idx, compiled.CoeffIdOne, schema.Secret)
@@ -129,20 +152,21 @@ func (system *scs) AddSecretVariable(name string) frontend.Variable {
 // It factorizes Variable that appears multiple times with != coeff Ids
 // To ensure the determinism in the compile process, Variables are stored as public∥secret∥internal∥unset
 // for each visibility, the Variables are sorted from lowest ID to highest ID
-func (system *scs) reduce(l compiled.LinearExpression) compiled.LinearExpression {
+func (system *scs[E, ptE]) reduce(l compiled.LinearExpression) compiled.LinearExpression {
 
 	// ensure our linear expression is sorted, by visibility and by Variable ID
 	sort.Sort(l)
 
-	mod := system.CurveID.Info().Fr.Modulus()
-	c := new(big.Int)
+	// mod := system.CurveID.Info().Fr.Modulus()
+	var _c E
+	c := ptE(&_c)
 	for i := 1; i < len(l); i++ {
 		pcID, pvID, pVis := l[i-1].Unpack()
 		ccID, cvID, cVis := l[i].Unpack()
 		if pVis == cVis && pvID == cvID {
 			// we have redundancy
 			c.Add(&system.st.Coeffs[pcID], &system.st.Coeffs[ccID])
-			c.Mod(c, mod)
+			// c.Mod(c, mod)
 			l[i-1].SetCoeffID(system.st.CoeffID(c))
 			l = append(l[:i], l[i+1:]...)
 			i--
@@ -152,7 +176,7 @@ func (system *scs) reduce(l compiled.LinearExpression) compiled.LinearExpression
 }
 
 // to handle wires that don't exist (=coef 0) in a sparse constraint
-func (system *scs) zero() compiled.Term {
+func (system *scs[E, ptE]) zero() compiled.Term {
 	var a compiled.Term
 	return a
 }
@@ -160,9 +184,9 @@ func (system *scs) zero() compiled.Term {
 // IsBoolean returns true if given variable was marked as boolean in the compiler (see MarkBoolean)
 // Use with care; variable may not have been **constrained** to be boolean
 // This returns true if the v is a constant and v == 0 || v == 1.
-func (system *scs) IsBoolean(v frontend.Variable) bool {
-	if b, ok := system.ConstantValue(v); ok {
-		return b.IsUint64() && b.Uint64() <= 1
+func (system *scs[E, ptE]) IsBoolean(v frontend.Variable) bool {
+	if b, ok := system.constantValue(v); ok {
+		return ptE(&b).IsOne() || ptE(&b).IsZero()
 	}
 	_, ok := system.mtBooleans[int(v.(compiled.Term))]
 	return ok
@@ -171,9 +195,9 @@ func (system *scs) IsBoolean(v frontend.Variable) bool {
 // MarkBoolean sets (but do not constraint!) v to be boolean
 // This is useful in scenarios where a variable is known to be boolean through a constraint
 // that is not api.AssertIsBoolean. If v is a constant, this is a no-op.
-func (system *scs) MarkBoolean(v frontend.Variable) {
-	if b, ok := system.ConstantValue(v); ok {
-		if !(b.IsUint64() && b.Uint64() <= 1) {
+func (system *scs[E, ptE]) MarkBoolean(v frontend.Variable) {
+	if b, ok := system.constantValue(v); ok {
+		if !(ptE(&b).IsOne() || ptE(&b).IsZero()) {
 			panic("MarkBoolean called a non-boolean constant")
 		}
 	}
@@ -184,7 +208,7 @@ func (system *scs) MarkBoolean(v frontend.Variable) {
 //
 // 1. checks that all user inputs are referenced in at least one constraint
 // 2. checks that all hints are constrained
-func (system *scs) checkVariables() error {
+func (system *scs[E, ptE]) checkVariables() error {
 
 	// TODO @gbotrel add unit test for that.
 
@@ -294,7 +318,7 @@ func init() {
 	tVariable = reflect.ValueOf(struct{ A frontend.Variable }{}).FieldByName("A").Type()
 }
 
-func (cs *scs) Compile() (frontend.CompiledConstraintSystem, error) {
+func (cs *scs[E, ptE]) Compile() (frontend.CompiledConstraintSystem, error) {
 	log := logger.Logger()
 	log.Info().
 		Str("curve", cs.CurveID.String()).
@@ -325,26 +349,32 @@ func (cs *scs) Compile() (frontend.CompiledConstraintSystem, error) {
 	// build levels
 	res.Levels = buildLevels(res)
 
+	// TODO FIXME temporary refactor
+	coeffs := make([]big.Int, len(cs.st.Coeffs))
+	for i := 0; i < len(cs.st.Coeffs); i++ {
+		ptE(&cs.st.Coeffs[i]).ToBigIntRegular(&coeffs[i])
+	}
+
 	switch cs.CurveID {
 	case ecc.BLS12_377:
-		return bls12377r1cs.NewSparseR1CS(res, cs.st.Coeffs), nil
+		return bls12377r1cs.NewSparseR1CS(res, coeffs), nil
 	case ecc.BLS12_381:
-		return bls12381r1cs.NewSparseR1CS(res, cs.st.Coeffs), nil
+		return bls12381r1cs.NewSparseR1CS(res, coeffs), nil
 	case ecc.BN254:
-		return bn254r1cs.NewSparseR1CS(res, cs.st.Coeffs), nil
+		return bn254r1cs.NewSparseR1CS(res, coeffs), nil
 	case ecc.BW6_761:
-		return bw6761r1cs.NewSparseR1CS(res, cs.st.Coeffs), nil
+		return bw6761r1cs.NewSparseR1CS(res, coeffs), nil
 	case ecc.BLS24_315:
-		return bls24315r1cs.NewSparseR1CS(res, cs.st.Coeffs), nil
+		return bls24315r1cs.NewSparseR1CS(res, coeffs), nil
 	case ecc.BW6_633:
-		return bw6633r1cs.NewSparseR1CS(res, cs.st.Coeffs), nil
+		return bw6633r1cs.NewSparseR1CS(res, coeffs), nil
 	default:
 		panic("unknown curveID")
 	}
 
 }
 
-func (cs *scs) SetSchema(s *schema.Schema) {
+func (cs *scs[E, ptE]) SetSchema(s *schema.Schema) {
 	if cs.Schema != nil {
 		panic("SetSchema called multiple times")
 	}
@@ -449,25 +479,36 @@ func (b *levelBuilder) processTerm(t compiled.Term, cID int) {
 
 }
 
+func (system *scs[E, ptE]) ConstantValue(v frontend.Variable) (*big.Int, bool) {
+	c, ok := system.constantValue(v)
+	if !ok {
+		return nil, false
+	}
+	b := new(big.Int)
+	ptE(&c).ToBigIntRegular(b)
+	return b, true
+}
+
 // ConstantValue returns the big.Int value of v. It
 // panics if v.IsConstant() == false
-func (system *scs) ConstantValue(v frontend.Variable) (*big.Int, bool) {
+func (system *scs[E, ptE]) constantValue(v frontend.Variable) (E, bool) {
+	var r E
 	switch t := v.(type) {
 	case compiled.Term:
-		return nil, false
+		return r, false
 	default:
-		res := utils.FromInterface(t)
-		return &res, true
+		_, ok := ptE(&r).SetInterface(t)
+		return r, ok == nil
 	}
 }
 
-func (system *scs) Backend() backend.ID {
+func (system *scs[E, ptE]) Backend() backend.ID {
 	return backend.PLONK
 }
 
 // Tag creates a tag at a given place in a circuit. The state of the tag may contain informations needed to
 // measure constraints, variables and coefficients creations through AddCounter
-func (system *scs) Tag(name string) frontend.Tag {
+func (system *scs[E, ptE]) Tag(name string) frontend.Tag {
 	_, file, line, _ := runtime.Caller(1)
 
 	return frontend.Tag{
@@ -480,7 +521,7 @@ func (system *scs) Tag(name string) frontend.Tag {
 // AddCounter measures the number of constraints, variables and coefficients created between two tags
 // note that the PlonK statistics are contextual since there is a post-compile phase where linear expressions
 // are factorized. That is, measuring 2 times the "repeating" piece of circuit may give less constraints the second time
-func (system *scs) AddCounter(from, to frontend.Tag) {
+func (system *scs[E, ptE]) AddCounter(from, to frontend.Tag) {
 	system.Counters = append(system.Counters, compiled.Counter{
 		From:          from.Name,
 		To:            to.Name,
@@ -503,7 +544,7 @@ func (system *scs) AddCounter(from, to frontend.Tag) {
 //
 // No new constraints are added to the newly created wire and must be added
 // manually in the circuit. Failing to do so leads to solver failure.
-func (system *scs) NewHint(f hint.Function, nbOutputs int, inputs ...frontend.Variable) ([]frontend.Variable, error) {
+func (system *scs[E, ptE]) NewHint(f hint.Function, nbOutputs int, inputs ...frontend.Variable) ([]frontend.Variable, error) {
 	if nbOutputs <= 0 {
 		return nil, fmt.Errorf("hint function must return at least one output")
 	}
@@ -550,39 +591,45 @@ func (system *scs) NewHint(f hint.Function, nbOutputs int, inputs ...frontend.Va
 }
 
 // returns in split into a slice of compiledTerm and the sum of all constants in in as a bigInt
-func (system *scs) filterConstantSum(in []frontend.Variable) (compiled.LinearExpression, big.Int) {
+func (system *scs[E, ptE]) filterConstantSum(in []frontend.Variable) (compiled.LinearExpression, E) {
 	res := make(compiled.LinearExpression, 0, len(in))
-	var b big.Int
+	var b, n E
 	for i := 0; i < len(in); i++ {
 		switch t := in[i].(type) {
 		case compiled.Term:
 			res = append(res, t)
 		default:
-			n := utils.FromInterface(t)
-			b.Add(&b, &n)
+			_, err := ptE(&n).SetInterface(t)
+			if err != nil {
+				panic(err) // TODO @gbotrel
+			}
+			ptE(&b).Add(&b, &n)
 		}
 	}
 	return res, b
 }
 
 // returns in split into a slice of compiledTerm and the product of all constants in in as a bigInt
-func (system *scs) filterConstantProd(in []frontend.Variable) (compiled.LinearExpression, big.Int) {
+func (system *scs[E, ptE]) filterConstantProd(in []frontend.Variable) (compiled.LinearExpression, E) {
 	res := make(compiled.LinearExpression, 0, len(in))
-	var b big.Int
-	b.SetInt64(1)
+	var b, n E
+	ptE(&b).SetUint64(1)
 	for i := 0; i < len(in); i++ {
 		switch t := in[i].(type) {
 		case compiled.Term:
 			res = append(res, t)
 		default:
-			n := utils.FromInterface(t)
-			b.Mul(&b, &n).Mod(&b, system.CurveID.Info().Fr.Modulus())
+			_, err := ptE(&n).SetInterface(t)
+			if err != nil {
+				panic(err) // TODO @gbotrel
+			}
+			ptE(&b).Mul(&b, &n)
 		}
 	}
 	return res, b
 }
 
-func (system *scs) splitSum(acc compiled.Term, r compiled.LinearExpression) compiled.Term {
+func (system *scs[E, ptE]) splitSum(acc compiled.Term, r compiled.LinearExpression) compiled.Term {
 
 	// floor case
 	if len(r) == 0 {
@@ -596,7 +643,7 @@ func (system *scs) splitSum(acc compiled.Term, r compiled.LinearExpression) comp
 	return system.splitSum(o, r[1:])
 }
 
-func (system *scs) splitProd(acc compiled.Term, r compiled.LinearExpression) compiled.Term {
+func (system *scs[E, ptE]) splitProd(acc compiled.Term, r compiled.LinearExpression) compiled.Term {
 
 	// floor case
 	if len(r) == 0 {

@@ -27,7 +27,7 @@ import (
 )
 
 // AssertIsEqual adds an assertion in the constraint system (i1 == i2)
-func (system *r1cs) AssertIsEqual(i1, i2 frontend.Variable) {
+func (system *r1cs[E, ptE]) AssertIsEqual(i1, i2 frontend.Variable) {
 	// encoded 1 * i1 == i2
 	r := system.toVariable(i1).(compiled.LinearExpression)
 	o := system.toVariable(i2).(compiled.LinearExpression)
@@ -38,19 +38,19 @@ func (system *r1cs) AssertIsEqual(i1, i2 frontend.Variable) {
 }
 
 // AssertIsDifferent constrain i1 and i2 to be different
-func (system *r1cs) AssertIsDifferent(i1, i2 frontend.Variable) {
+func (system *r1cs[E, ptE]) AssertIsDifferent(i1, i2 frontend.Variable) {
 	system.Inverse(system.Sub(i1, i2))
 }
 
 // AssertIsBoolean adds an assertion in the constraint system (v == 0 ∥ v == 1)
-func (system *r1cs) AssertIsBoolean(i1 frontend.Variable) {
+func (system *r1cs[E, ptE]) AssertIsBoolean(i1 frontend.Variable) {
 
 	vars, _ := system.toVariables(i1)
 	v := vars[0]
 
-	if c, ok := system.ConstantValue(v); ok {
-		if !(c.IsUint64() && (c.Uint64() == 0 || c.Uint64() == 1)) {
-			panic(fmt.Sprintf("assertIsBoolean failed: constant(%s)", c.String()))
+	if c, ok := system.constantValue(v); ok {
+		if !(ptE(&c).IsOne() || ptE(&c).IsZero()) {
+			panic(fmt.Sprintf("assertIsBoolean failed: constant(%s)", ptE(&c).String()))
 		}
 		return
 	}
@@ -75,7 +75,7 @@ func (system *r1cs) AssertIsBoolean(i1 frontend.Variable) {
 //
 // derived from:
 // https://github.com/zcash/zips/blob/main/protocol/protocol.pdf
-func (system *r1cs) AssertIsLessOrEqual(_v frontend.Variable, bound frontend.Variable) {
+func (system *r1cs[E, ptE]) AssertIsLessOrEqual(_v frontend.Variable, bound frontend.Variable) {
 	v, _ := system.toVariables(_v)
 
 	switch b := bound.(type) {
@@ -88,7 +88,7 @@ func (system *r1cs) AssertIsLessOrEqual(_v frontend.Variable, bound frontend.Var
 
 }
 
-func (system *r1cs) mustBeLessOrEqVar(a, bound compiled.LinearExpression) {
+func (system *r1cs[E, ptE]) mustBeLessOrEqVar(a, bound compiled.LinearExpression) {
 	debug := system.AddDebugInfo("mustBeLessOrEq", a, " <= ", bound)
 
 	nbBits := system.BitLen()
@@ -129,7 +129,7 @@ func (system *r1cs) mustBeLessOrEqVar(a, bound compiled.LinearExpression) {
 
 }
 
-func (system *r1cs) mustBeLessOrEqCst(a compiled.LinearExpression, bound big.Int) {
+func (system *r1cs[E, ptE]) mustBeLessOrEqCst(a compiled.LinearExpression, bound big.Int) {
 
 	nbBits := system.BitLen()
 

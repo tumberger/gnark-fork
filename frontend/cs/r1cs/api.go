@@ -18,7 +18,6 @@ package r1cs
 
 import (
 	"fmt"
-	"math/big"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -35,7 +34,7 @@ import (
 // Arithmetic
 
 // Add returns res = i1+i2+...in
-func (system *r1cs) Add(i1, i2 frontend.Variable, in ...frontend.Variable) frontend.Variable {
+func (system *r1cs[E, ptE]) Add(i1, i2 frontend.Variable, in ...frontend.Variable) frontend.Variable {
 
 	// extract frontend.Variables from input
 	vars, s := system.toVariables(append([]frontend.Variable{i1, i2}, in...)...)
@@ -54,11 +53,11 @@ func (system *r1cs) Add(i1, i2 frontend.Variable, in ...frontend.Variable) front
 }
 
 // Neg returns -i
-func (system *r1cs) Neg(i frontend.Variable) frontend.Variable {
+func (system *r1cs[E, ptE]) Neg(i frontend.Variable) frontend.Variable {
 	vars, _ := system.toVariables(i)
 
-	if n, ok := system.ConstantValue(vars[0]); ok {
-		n.Neg(n)
+	if n, ok := system.constantValue(vars[0]); ok {
+		ptE(&n).Neg(&n)
 		return system.toVariable(n)
 	}
 
@@ -66,7 +65,7 @@ func (system *r1cs) Neg(i frontend.Variable) frontend.Variable {
 }
 
 // Sub returns res = i1 - i2
-func (system *r1cs) Sub(i1, i2 frontend.Variable, in ...frontend.Variable) frontend.Variable {
+func (system *r1cs[E, ptE]) Sub(i1, i2 frontend.Variable, in ...frontend.Variable) frontend.Variable {
 
 	// extract frontend.Variables from input
 	vars, s := system.toVariables(append([]frontend.Variable{i1, i2}, in...)...)
@@ -88,13 +87,13 @@ func (system *r1cs) Sub(i1, i2 frontend.Variable, in ...frontend.Variable) front
 }
 
 // Mul returns res = i1 * i2 * ... in
-func (system *r1cs) Mul(i1, i2 frontend.Variable, in ...frontend.Variable) frontend.Variable {
+func (system *r1cs[E, ptE]) Mul(i1, i2 frontend.Variable, in ...frontend.Variable) frontend.Variable {
 	vars, _ := system.toVariables(append([]frontend.Variable{i1, i2}, in...)...)
 
 	mul := func(v1, v2 compiled.LinearExpression) compiled.LinearExpression {
 
-		n1, v1Constant := system.ConstantValue(v1)
-		n2, v2Constant := system.ConstantValue(v2)
+		n1, v1Constant := system.constantValue(v1)
+		n2, v2Constant := system.constantValue(v2)
 
 		// v1 and v2 are both unknown, this is the only case we add a constraint
 		if !v1Constant && !v2Constant {
@@ -105,7 +104,7 @@ func (system *r1cs) Mul(i1, i2 frontend.Variable, in ...frontend.Variable) front
 
 		// v1 and v2 are constants, we multiply big.Int values and return resulting constant
 		if v1Constant && v2Constant {
-			n1.Mul(n1, n2).Mod(n1, system.CurveID.Info().Fr.Modulus())
+			ptE(&n1).Mul(&n1, &n2)
 			return system.toVariable(n1).(compiled.LinearExpression)
 		}
 
@@ -126,41 +125,42 @@ func (system *r1cs) Mul(i1, i2 frontend.Variable, in ...frontend.Variable) front
 	return res
 }
 
-func (system *r1cs) mulConstant(v1, constant compiled.LinearExpression) compiled.LinearExpression {
+func (system *r1cs[E, ptE]) mulConstant(v1, constant compiled.LinearExpression) compiled.LinearExpression {
 	// multiplying a frontend.Variable by a constant -> we updated the coefficients in the linear expression
 	// leading to that frontend.Variable
 	res := v1.Clone()
-	lambda, _ := system.ConstantValue(constant)
+	lambda, _ := system.constantValue(constant)
 
 	for i, t := range v1 {
 		cID, vID, visibility := t.Unpack()
-		var newCoeff big.Int
+		var _newCoeff E
+		newCoeff := ptE(&_newCoeff)
 		switch cID {
 		case compiled.CoeffIdMinusOne:
-			newCoeff.Neg(lambda)
+			newCoeff.Neg(&lambda)
 		case compiled.CoeffIdZero:
 			newCoeff.SetUint64(0)
 		case compiled.CoeffIdOne:
-			newCoeff.Set(lambda)
+			_newCoeff = lambda
 		case compiled.CoeffIdTwo:
-			newCoeff.Add(lambda, lambda)
+			newCoeff.Double(&lambda)
 		default:
 			coeff := system.st.Coeffs[cID]
-			newCoeff.Mul(&coeff, lambda)
+			newCoeff.Mul(&coeff, &lambda)
 		}
-		res[i] = compiled.Pack(vID, system.st.CoeffID(&newCoeff), visibility)
+		res[i] = compiled.Pack(vID, system.st.CoeffID(&_newCoeff), visibility)
 	}
 	return res
 }
 
-func (system *r1cs) DivUnchecked(i1, i2 frontend.Variable) frontend.Variable {
+func (system *r1cs[E, ptE]) DivUnchecked(i1, i2 frontend.Variable) frontend.Variable {
 	vars, _ := system.toVariables(i1, i2)
 
 	v1 := vars[0]
 	v2 := vars[1]
 
-	n1, v1Constant := system.ConstantValue(v1)
-	n2, v2Constant := system.ConstantValue(v2)
+	n1, v1Constant := system.constantValue(v1)
+	n2, v2Constant := system.constantValue(v2)
 
 	if !v2Constant {
 		res := system.newInternalVariable()
@@ -171,14 +171,13 @@ func (system *r1cs) DivUnchecked(i1, i2 frontend.Variable) frontend.Variable {
 	}
 
 	// v2 is constant
-	if n2.IsUint64() && n2.Uint64() == 0 {
+	if ptE(&n2).IsZero() {
 		panic("div by constant(0)")
 	}
-	q := system.CurveID.Info().Fr.Modulus()
-	n2.ModInverse(n2, q)
+	ptE(&n2).Inverse(&n2)
 
 	if v1Constant {
-		n2.Mul(n2, n1).Mod(n2, q)
+		ptE(&n2).Mul(&n2, &n1)
 		return system.toVariable(n2)
 	}
 
@@ -187,14 +186,14 @@ func (system *r1cs) DivUnchecked(i1, i2 frontend.Variable) frontend.Variable {
 }
 
 // Div returns res = i1 / i2
-func (system *r1cs) Div(i1, i2 frontend.Variable) frontend.Variable {
+func (system *r1cs[E, ptE]) Div(i1, i2 frontend.Variable) frontend.Variable {
 	vars, _ := system.toVariables(i1, i2)
 
 	v1 := vars[0]
 	v2 := vars[1]
 
-	n1, v1Constant := system.ConstantValue(v1)
-	n2, v2Constant := system.ConstantValue(v2)
+	n1, v1Constant := system.constantValue(v1)
+	n2, v2Constant := system.constantValue(v2)
 
 	if !v2Constant {
 		res := system.newInternalVariable()
@@ -207,14 +206,13 @@ func (system *r1cs) Div(i1, i2 frontend.Variable) frontend.Variable {
 	}
 
 	// v2 is constant
-	if n2.IsUint64() && n2.Uint64() == 0 {
+	if ptE(&n2).IsZero() {
 		panic("div by constant(0)")
 	}
-	q := system.CurveID.Info().Fr.Modulus()
-	n2.ModInverse(n2, q)
+	ptE(&n2).Inverse(&n2)
 
 	if v1Constant {
-		n2.Mul(n2, n1).Mod(n2, q)
+		ptE(&n2).Mul(&n2, &n1)
 		return system.toVariable(n2)
 	}
 
@@ -223,15 +221,15 @@ func (system *r1cs) Div(i1, i2 frontend.Variable) frontend.Variable {
 }
 
 // Inverse returns res = inverse(v)
-func (system *r1cs) Inverse(i1 frontend.Variable) frontend.Variable {
+func (system *r1cs[E, ptE]) Inverse(i1 frontend.Variable) frontend.Variable {
 	vars, _ := system.toVariables(i1)
 
-	if c, ok := system.ConstantValue(vars[0]); ok {
-		if c.IsUint64() && c.Uint64() == 0 {
+	if c, ok := system.constantValue(vars[0]); ok {
+		if ptE(&c).IsZero() {
 			panic("inverse by constant(0)")
 		}
 
-		c.ModInverse(c, system.CurveID.Info().Fr.Modulus())
+		ptE(&c).Inverse(&c)
 		return system.toVariable(c)
 	}
 
@@ -252,7 +250,7 @@ func (system *r1cs) Inverse(i1 frontend.Variable) frontend.Variable {
 // n default value is fr.Bits the number of bits needed to represent a field element
 //
 // The result in in little endian (first bit= lsb)
-func (system *r1cs) ToBinary(i1 frontend.Variable, n ...int) []frontend.Variable {
+func (system *r1cs[E, ptE]) ToBinary(i1 frontend.Variable, n ...int) []frontend.Variable {
 	// nbBits
 	nbBits := system.BitLen()
 	if len(n) == 1 {
@@ -266,12 +264,12 @@ func (system *r1cs) ToBinary(i1 frontend.Variable, n ...int) []frontend.Variable
 }
 
 // FromBinary packs b, seen as a fr.Element in little endian
-func (system *r1cs) FromBinary(_b ...frontend.Variable) frontend.Variable {
+func (system *r1cs[E, ptE]) FromBinary(_b ...frontend.Variable) frontend.Variable {
 	return bits.FromBinary(system, _b)
 }
 
 // Xor compute the XOR between two frontend.Variables
-func (system *r1cs) Xor(_a, _b frontend.Variable) frontend.Variable {
+func (system *r1cs[E, ptE]) Xor(_a, _b frontend.Variable) frontend.Variable {
 
 	vars, _ := system.toVariables(_a, _b)
 
@@ -293,7 +291,7 @@ func (system *r1cs) Xor(_a, _b frontend.Variable) frontend.Variable {
 }
 
 // Or compute the OR between two frontend.Variables
-func (system *r1cs) Or(_a, _b frontend.Variable) frontend.Variable {
+func (system *r1cs[E, ptE]) Or(_a, _b frontend.Variable) frontend.Variable {
 	vars, _ := system.toVariables(_a, _b)
 
 	a := vars[0]
@@ -313,7 +311,7 @@ func (system *r1cs) Or(_a, _b frontend.Variable) frontend.Variable {
 }
 
 // And compute the AND between two frontend.Variables
-func (system *r1cs) And(_a, _b frontend.Variable) frontend.Variable {
+func (system *r1cs[E, ptE]) And(_a, _b frontend.Variable) frontend.Variable {
 	vars, _ := system.toVariables(_a, _b)
 
 	a := vars[0]
@@ -331,7 +329,7 @@ func (system *r1cs) And(_a, _b frontend.Variable) frontend.Variable {
 // Conditionals
 
 // Select if i0 is true, yields i1 else yields i2
-func (system *r1cs) Select(i0, i1, i2 frontend.Variable) frontend.Variable {
+func (system *r1cs[E, ptE]) Select(i0, i1, i2 frontend.Variable) frontend.Variable {
 
 	vars, _ := system.toVariables(i0, i1, i2)
 	cond := vars[0]
@@ -339,19 +337,19 @@ func (system *r1cs) Select(i0, i1, i2 frontend.Variable) frontend.Variable {
 	// ensures that cond is boolean
 	system.AssertIsBoolean(cond)
 
-	if c, ok := system.ConstantValue(cond); ok {
+	if c, ok := system.constantValue(cond); ok {
 		// condition is a constant return i1 if true, i2 if false
-		if c.Uint64() == 1 {
+		if ptE(&c).IsOne() {
 			return vars[1]
 		}
 		return vars[2]
 	}
 
-	n1, ok1 := system.ConstantValue(vars[1])
-	n2, ok2 := system.ConstantValue(vars[2])
+	n1, ok1 := system.constantValue(vars[1])
+	n2, ok2 := system.constantValue(vars[2])
 
 	if ok1 && ok2 {
-		diff := n1.Sub(n1, n2)
+		diff := ptE(&n1).Sub(&n1, &n2)
 		res := system.Mul(cond, diff)  // no constraint is recorded
 		res = system.Add(res, vars[2]) // no constraint is recorded
 		return res
@@ -359,7 +357,7 @@ func (system *r1cs) Select(i0, i1, i2 frontend.Variable) frontend.Variable {
 
 	// special case appearing in AssertIsLessOrEq
 	if ok1 {
-		if n1.IsUint64() && n1.Uint64() == 0 {
+		if ptE(&n1).IsZero() {
 			v := system.Sub(1, vars[0])
 			return system.Mul(v, vars[2])
 		}
@@ -374,7 +372,7 @@ func (system *r1cs) Select(i0, i1, i2 frontend.Variable) frontend.Variable {
 // Lookup2 performs a 2-bit lookup between i1, i2, i3, i4 based on bits b0
 // and b1. Returns i0 if b0=b1=0, i1 if b0=1 and b1=0, i2 if b0=0 and b1=1
 // and i3 if b0=b1=1.
-func (system *r1cs) Lookup2(b0, b1 frontend.Variable, i0, i1, i2, i3 frontend.Variable) frontend.Variable {
+func (system *r1cs[E, ptE]) Lookup2(b0, b1 frontend.Variable, i0, i1, i2, i3 frontend.Variable) frontend.Variable {
 	vars, _ := system.toVariables(b0, b1, i0, i1, i2, i3)
 	s0, s1 := vars[0], vars[1]
 	in0, in1, in2, in3 := vars[2], vars[3], vars[4], vars[5]
@@ -384,12 +382,12 @@ func (system *r1cs) Lookup2(b0, b1 frontend.Variable, i0, i1, i2, i3 frontend.Va
 	system.AssertIsBoolean(s0)
 	system.AssertIsBoolean(s1)
 
-	c0, b0IsConstant := system.ConstantValue(s0)
-	c1, b1IsConstant := system.ConstantValue(s1)
+	c0, b0IsConstant := system.constantValue(s0)
+	c1, b1IsConstant := system.constantValue(s1)
 
 	if b0IsConstant && b1IsConstant {
-		b0 := c0.Uint64() == 1
-		b1 := c1.Uint64() == 1
+		b0 := ptE(&c0).IsOne()
+		b1 := ptE(&c1).IsOne()
 
 		if !b0 && !b1 {
 			return in0
@@ -424,11 +422,11 @@ func (system *r1cs) Lookup2(b0, b1 frontend.Variable, i0, i1, i2, i3 frontend.Va
 }
 
 // IsZero returns 1 if i1 is zero, 0 otherwise
-func (system *r1cs) IsZero(i1 frontend.Variable) frontend.Variable {
+func (system *r1cs[E, ptE]) IsZero(i1 frontend.Variable) frontend.Variable {
 	vars, _ := system.toVariables(i1)
 	a := vars[0]
-	if c, ok := system.ConstantValue(a); ok {
-		if c.IsUint64() && c.Uint64() == 0 {
+	if c, ok := system.constantValue(a); ok {
+		if ptE(&c).IsZero() {
 			return system.toVariable(1)
 		}
 		return system.toVariable(0)
@@ -456,7 +454,7 @@ func (system *r1cs) IsZero(i1 frontend.Variable) frontend.Variable {
 }
 
 // Cmp returns 1 if i1>i2, 0 if i1=i2, -1 if i1<i2
-func (system *r1cs) Cmp(i1, i2 frontend.Variable) frontend.Variable {
+func (system *r1cs[E, ptE]) Cmp(i1, i2 frontend.Variable) frontend.Variable {
 
 	vars, _ := system.toVariables(i1, i2)
 	bi1 := system.ToBinary(vars[0], system.BitLen())
@@ -486,7 +484,7 @@ func (system *r1cs) Cmp(i1, i2 frontend.Variable) frontend.Variable {
 // the print will be done once the R1CS.Solve() method is executed
 //
 // if one of the input is a variable, its value will be resolved avec R1CS.Solve() method is called
-func (system *r1cs) Println(a ...frontend.Variable) {
+func (system *r1cs[E, ptE]) Println(a ...frontend.Variable) {
 	var log compiled.LogEntry
 
 	// prefix log line with file.go:line
@@ -560,18 +558,18 @@ func printArg(log *compiled.LogEntry, sbb *strings.Builder, a frontend.Variable)
 }
 
 // returns -le, the result is a copy
-func (system *r1cs) negateLinExp(l compiled.LinearExpression) compiled.LinearExpression {
+func (system *r1cs[E, ptE]) negateLinExp(l compiled.LinearExpression) compiled.LinearExpression {
 	res := make(compiled.LinearExpression, len(l))
-	var lambda big.Int
+	var lambda E
 	for i, t := range l {
 		cID, vID, visibility := t.Unpack()
-		lambda.Neg(&system.st.Coeffs[cID])
+		ptE(&lambda).Neg(&system.st.Coeffs[cID])
 		cID = system.st.CoeffID(&lambda)
 		res[i] = compiled.Pack(vID, cID, visibility)
 	}
 	return res
 }
 
-func (system *r1cs) Compiler() frontend.Compiler {
+func (system *r1cs[E, ptE]) Compiler() frontend.Compiler {
 	return system
 }

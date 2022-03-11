@@ -27,13 +27,13 @@ import (
 )
 
 // AssertIsEqual fails if i1 != i2
-func (system *scs) AssertIsEqual(i1, i2 frontend.Variable) {
+func (system *scs[E, ptE]) AssertIsEqual(i1, i2 frontend.Variable) {
 
-	c1, i1Constant := system.ConstantValue(i1)
-	c2, i2Constant := system.ConstantValue(i2)
+	c1, i1Constant := system.constantValue(i1)
+	c2, i2Constant := system.constantValue(i2)
 
 	if i1Constant && i2Constant {
-		if c1.Cmp(c2) != 0 {
+		if !ptE(&c1).Equal(&c2) {
 			panic("i1, i2 should be equal")
 		}
 		return
@@ -48,8 +48,8 @@ func (system *scs) AssertIsEqual(i1, i2 frontend.Variable) {
 		lc, _, _ := l.Unpack()
 		k := c2
 		debug := system.AddDebugInfo("assertIsEqual", l, "+", i2, " == 0")
-		k.Neg(k)
-		_k := system.st.CoeffID(k)
+		ptE(&k).Neg(&k)
+		_k := system.st.CoeffID(&k)
 		system.addPlonkConstraint(l, system.zero(), system.zero(), lc, compiled.CoeffIdZero, compiled.CoeffIdZero, compiled.CoeffIdZero, compiled.CoeffIdZero, _k, debug)
 		return
 	}
@@ -63,15 +63,15 @@ func (system *scs) AssertIsEqual(i1, i2 frontend.Variable) {
 }
 
 // AssertIsDifferent fails if i1 == i2
-func (system *scs) AssertIsDifferent(i1, i2 frontend.Variable) {
+func (system *scs[E, ptE]) AssertIsDifferent(i1, i2 frontend.Variable) {
 	system.Inverse(system.Sub(i1, i2))
 }
 
 // AssertIsBoolean fails if v != 0 ∥ v != 1
-func (system *scs) AssertIsBoolean(i1 frontend.Variable) {
-	if c, ok := system.ConstantValue(i1); ok {
-		if !(c.IsUint64() && (c.Uint64() == 0 || c.Uint64() == 1)) {
-			panic(fmt.Sprintf("assertIsBoolean failed: constant(%s)", c.String()))
+func (system *scs[E, ptE]) AssertIsBoolean(i1 frontend.Variable) {
+	if c, ok := system.constantValue(i1); ok {
+		if !(ptE(&c).IsOne() || ptE(&c).IsZero()) {
+			panic(fmt.Sprintf("assertIsBoolean failed: constant(%s)", ptE(&c).String()))
 		}
 		return
 	}
@@ -83,14 +83,14 @@ func (system *scs) AssertIsBoolean(i1 frontend.Variable) {
 	system.mtBooleans[int(t)] = struct{}{}
 	debug := system.AddDebugInfo("assertIsBoolean", t, " == (0|1)")
 	cID, _, _ := t.Unpack()
-	var mCoef big.Int
-	mCoef.Neg(&system.st.Coeffs[cID])
+	var mCoef E
+	ptE(&mCoef).Neg(&system.st.Coeffs[cID])
 	mcID := system.st.CoeffID(&mCoef)
 	system.addPlonkConstraint(t, t, system.zero(), cID, compiled.CoeffIdZero, mcID, cID, compiled.CoeffIdZero, compiled.CoeffIdZero, debug)
 }
 
 // AssertIsLessOrEqual fails if  v > bound
-func (system *scs) AssertIsLessOrEqual(v frontend.Variable, bound frontend.Variable) {
+func (system *scs[E, ptE]) AssertIsLessOrEqual(v frontend.Variable, bound frontend.Variable) {
 	switch b := bound.(type) {
 	case compiled.Term:
 		system.mustBeLessOrEqVar(v.(compiled.Term), b)
@@ -99,7 +99,7 @@ func (system *scs) AssertIsLessOrEqual(v frontend.Variable, bound frontend.Varia
 	}
 }
 
-func (system *scs) mustBeLessOrEqVar(a compiled.Term, bound compiled.Term) {
+func (system *scs[E, ptE]) mustBeLessOrEqVar(a compiled.Term, bound compiled.Term) {
 
 	debug := system.AddDebugInfo("mustBeLessOrEq", a, " <= ", bound)
 
@@ -146,7 +146,7 @@ func (system *scs) mustBeLessOrEqVar(a compiled.Term, bound compiled.Term) {
 
 }
 
-func (system *scs) mustBeLessOrEqCst(a compiled.Term, bound big.Int) {
+func (system *scs[E, ptE]) mustBeLessOrEqCst(a compiled.Term, bound big.Int) {
 
 	nbBits := system.BitLen()
 

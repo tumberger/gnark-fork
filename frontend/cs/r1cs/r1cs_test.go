@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc"
+	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/compiled"
 	"github.com/consensys/gnark/frontend/schema"
@@ -51,7 +52,7 @@ func TestQuickSort(t *testing.T) {
 
 func TestReduce(t *testing.T) {
 
-	cs := newBuilder(ecc.BN254, frontend.CompileConfig{})
+	cs := newBuilder[fr.Element](ecc.BN254, frontend.CompileConfig{})
 	x := cs.newInternalVariable()
 	y := cs.newInternalVariable()
 	z := cs.newInternalVariable()
