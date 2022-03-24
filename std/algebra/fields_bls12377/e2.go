@@ -27,6 +27,13 @@ type E2 struct {
 	A0, A1 frontend.Variable
 }
 
+// SetZero returns a newly allocated element equal to 0
+func (e *E2) SetZero(api frontend.API) *E2 {
+	e.A0 = 0
+	e.A1 = 0
+	return e
+}
+
 // SetOne returns a newly allocated element equal to 1
 func (e *E2) SetOne(api frontend.API) *E2 {
 	e.A0 = 1

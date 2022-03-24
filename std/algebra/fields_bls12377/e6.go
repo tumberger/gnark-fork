@@ -26,6 +26,22 @@ type E6 struct {
 	B0, B1, B2 E2
 }
 
+// SetZero returns a newly allocated element equal to 0
+func (e *E6) SetZero(api frontend.API) *E6 {
+	e.B0.SetZero(api)
+	e.B1.SetZero(api)
+	e.B2.SetZero(api)
+	return e
+}
+
+// SetOne returns a newly allocated element equal to 1
+func (e *E6) SetOne(api frontend.API) *E6 {
+	e.B0.SetOne(api)
+	e.B1.SetZero(api)
+	e.B2.SetZero(api)
+	return e
+}
+
 // Add creates a fp6elmt from fp elmts
 func (e *E6) Add(api frontend.API, e1, e2 E6) *E6 {
 

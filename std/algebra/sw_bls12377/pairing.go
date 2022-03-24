@@ -91,7 +91,7 @@ func FinalExponentiation(api frontend.API, e1 fields_bls12377.E12) fields_bls123
 	// Daiki Hayashida and Kenichiro Hayasaka
 	// and Tadanori Teruya
 	// https://eprint.iacr.org/2020/875.pdf
-	t[0].CyclotomicSquare(api, result)
+	t[0].CyclotomicSquareGS(api, result)
 	t[1].Expt(api, result, genT)
 	t[2].Conjugate(api, result)
 	t[1].Mul(api, t[1], t[2])

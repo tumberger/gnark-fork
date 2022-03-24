@@ -173,7 +173,7 @@ func (e *E12) Square(api frontend.API, x E12) *E12 {
 // Karabina's compressed cyclotomic square
 // https://eprint.iacr.org/2010/542.pdf
 // Th. 3.2 with minor modifications to fit our tower
-func (e *E12) CyclotomicSquareCompressed(api frontend.API, x E12) *E12 {
+func (e *E12) CyclotomicSquareKarabina(api frontend.API, x E12) *E12 {
 
 	var t [7]E2
 
@@ -246,8 +246,8 @@ func (e *E12) CyclotomicSquareCompressed(api frontend.API, x E12) *E12 {
 	return e
 }
 
-// Decompress Karabina's cyclotomic square result
-func (e *E12) Decompress(api frontend.API, x E12) *E12 {
+// DecompressKarabina Karabina's cyclotomic square result
+func (e *E12) DecompressKarabina(api frontend.API, x E12) *E12 {
 
 	var t [3]E2
 	var one E2
@@ -295,7 +295,7 @@ func (e *E12) Decompress(api frontend.API, x E12) *E12 {
 // Granger-Scott's cyclotomic square
 // squares a Fp12 elt in the cyclotomic group
 // https://eprint.iacr.org/2009/565.pdf, 3.2
-func (e *E12) CyclotomicSquare(api frontend.API, x E12) *E12 {
+func (e *E12) CyclotomicSquareGS(api frontend.API, x E12) *E12 {
 
 	// https://eprint.iacr.org/2009/565.pdf, 3.2
 	var t [9]E2
@@ -411,6 +411,56 @@ func (e *E12) Inverse(api frontend.API, e1 E12) *E12 {
 	return e
 }
 
+// Compress E12 element to half its size
+// e must be in the cyclotomic subgroup
+// i.e. z^(p^4-p^2+1)=1, e.g. in GT
+func (e *E12) CompressT2(api frontend.API) E6 {
+
+	var res, tmp, one E6
+	one.SetOne(api)
+	tmp.Inverse(api, e.C1)
+	res.Add(api, e.C0, one).
+		Mul(api, res, tmp)
+
+	return res
+}
+
+// DecompressT2 a compressed E12 element
+// e must be in the cyclotomic subgroup
+// i.e. z^(p^4-p^2+1)=1, e.g. in GT
+func (e *E6) DecompressT2(api frontend.API) E12 {
+
+	var res, num, denum E12
+	num.C0 = *e
+	num.C1.SetOne(api)
+	denum.C0 = *e
+	denum.C1.SetOne(api).Neg(api, denum.C1)
+	res.Inverse(api, denum).
+		Mul(api, res, num)
+
+	return res
+}
+
+func (e *E6) CyclotomicSquareT2(api frontend.API, e1 E6) *E6 {
+	var D, num, denum E6
+	D.SetZero(api)
+	D.B1.SetOne(api)
+	num.Square(api, e1).Add(api, num, D)
+	denum.Add(api, e1, e1).Inverse(api, denum)
+	e.Mul(api, num, denum)
+	return e
+}
+
+func (e *E6) CyclotomicMulT2(api frontend.API, e1, e2 E6) *E6 {
+	var D, num, denum E6
+	D.SetZero(api)
+	D.B1.SetOne(api)
+	num.Mul(api, e1, e2).Add(api, num, D)
+	denum.Add(api, e1, e2).Inverse(api, denum)
+	e.Mul(api, num, denum)
+	return e
+}
+
 // Select sets e to r1 if b=1, r2 otherwise
 func (e *E12) Select(api frontend.API, b frontend.Variable, r1, r2 E12) *E12 {
 
@@ -430,10 +480,17 @@ func (e *E12) Select(api frontend.API, b frontend.Variable, r1, r2 E12) *E12 {
 	return e
 }
 
-// nSquareCompressed repeated compressed cyclotmic square
-func (e *E12) nSquareCompressed(api frontend.API, n int) {
+// nSquareKarabina repeated compressed cyclotmic square
+func (e *E12) nSquareKarabina(api frontend.API, n int) {
 	for i := 0; i < n; i++ {
-		e.CyclotomicSquareCompressed(api, *e)
+		e.CyclotomicSquareKarabina(api, *e)
+	}
+}
+
+// nSquareT2 repeated compressed cyclotmic square
+func (e *E6) nSquareT2(api frontend.API, n int) {
+	for i := 0; i < n; i++ {
+		e.CyclotomicSquareT2(api, *e)
 	}
 }
 
@@ -444,20 +501,20 @@ func (e *E12) Expt(api frontend.API, e1 E12, exponent uint64) *E12 {
 
 	res := e1
 
-	res.nSquareCompressed(api, 5)
-	res.Decompress(api, res)
+	res.nSquareKarabina(api, 5)
+	res.DecompressKarabina(api, res)
 	res.Mul(api, res, e1)
 	x33 := res
-	res.nSquareCompressed(api, 7)
-	res.Decompress(api, res)
+	res.nSquareKarabina(api, 7)
+	res.DecompressKarabina(api, res)
 	res.Mul(api, res, x33)
-	res.nSquareCompressed(api, 4)
-	res.Decompress(api, res)
+	res.nSquareKarabina(api, 4)
+	res.DecompressKarabina(api, res)
 	res.Mul(api, res, e1)
-	res.CyclotomicSquare(api, res)
+	res.CyclotomicSquareGS(api, res)
 	res.Mul(api, res, e1)
-	res.nSquareCompressed(api, 46)
-	res.Decompress(api, res)
+	res.nSquareKarabina(api, 46)
+	res.DecompressKarabina(api, res)
 	res.Mul(api, res, e1)
 
 	*e = res

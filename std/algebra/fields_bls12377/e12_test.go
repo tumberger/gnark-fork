@@ -162,7 +162,7 @@ func (circuit *fp12CycloSquare) Define(api frontend.API) error {
 
 	var u, v E12
 	u.Square(api, circuit.A)
-	v.CyclotomicSquare(api, circuit.A)
+	v.CyclotomicSquareGS(api, circuit.A)
 	u.MustBeEqual(api, v)
 	u.MustBeEqual(api, circuit.B)
 	return nil
@@ -193,25 +193,25 @@ func TestFp12CyclotomicSquare(t *testing.T) {
 
 }
 
-type fp12CycloSquareCompressed struct {
+type fp12CycloSquareKarabina struct {
 	A E12
 	B E12 `gnark:",public"`
 }
 
-func (circuit *fp12CycloSquareCompressed) Define(api frontend.API) error {
+func (circuit *fp12CycloSquareKarabina) Define(api frontend.API) error {
 
 	var u, v E12
 	u.Square(api, circuit.A)
-	v.CyclotomicSquareCompressed(api, circuit.A)
-	v.Decompress(api, v)
+	v.CyclotomicSquareKarabina(api, circuit.A)
+	v.DecompressKarabina(api, v)
 	u.MustBeEqual(api, v)
 	u.MustBeEqual(api, circuit.B)
 	return nil
 }
 
-func TestFp12CyclotomicSquareCompressed(t *testing.T) {
+func TestFp12CyclotomicSquareKarabina(t *testing.T) {
 
-	var circuit, witness fp12CycloSquareCompressed
+	var circuit, witness fp12CycloSquareKarabina
 
 	// witness values
 	var a, b bls12377.E12
@@ -225,7 +225,7 @@ func TestFp12CyclotomicSquareCompressed(t *testing.T) {
 	a.FrobeniusSquare(&tmp).Mul(&a, &tmp)
 
 	b.CyclotomicSquareCompressed(&a)
-	b.Decompress(&b)
+	b.DecompressKarabina(&b)
 	witness.A.Assign(&a)
 	witness.B.Assign(&b)
 
@@ -410,4 +410,41 @@ func TestFp12MulBy034(t *testing.T) {
 	assert := test.NewAssert(t)
 	assert.SolvingSucceeded(&circuit, &witness, test.WithCurves(ecc.BW6_761))
 
+}
+
+type fp12Torus2 struct {
+	A E12
+	C E12 `gnark:",public"`
+}
+
+func (circuit *fp12Torus2) Define(api frontend.API) error {
+
+	a := circuit.A.CompressT2(api)
+	a.CyclotomicSquareT2(api, a)
+	expected := a.DecompressT2(api)
+	expected.MustBeEqual(api, circuit.C)
+	return nil
+}
+
+func TestTorusFp12(t *testing.T) {
+
+	var circuit, witness fp12Torus2
+
+	// witness values
+	var a, b, c bls12377.E12
+	a.SetRandom()
+	// put in cyclotomic group
+	b.Conjugate(&a)
+	a.Inverse(&a)
+	b.Mul(&b, &a)
+	a.FrobeniusSquare(&b).Mul(&a, &b)
+
+	c.Square(&a)
+
+	witness.A.Assign(&a)
+	witness.C.Assign(&c)
+
+	// cs values
+	assert := test.NewAssert(t)
+	assert.SolvingSucceeded(&circuit, &witness, test.WithCurves(ecc.BW6_761))
 }
