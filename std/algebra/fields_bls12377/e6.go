@@ -112,6 +112,21 @@ func (e *E6) Mul(api frontend.API, e1, e2 E6) *E6 {
 	return e
 }
 
+// DivByFp fivides a fp6 elmt by a fp elmt
+func (e *E6) DivByFp(api frontend.API, e1 E6, c interface{}) *E6 {
+	res := E6{}
+
+	res.B0.DivByFp(api, e1.B0, c)
+	res.B1.DivByFp(api, e1.B1, c)
+	res.B2.DivByFp(api, e1.B2, c)
+
+	e.B0 = res.B0
+	e.B1 = res.B1
+	e.B2 = res.B2
+
+	return e
+}
+
 // MulByFp2 creates a fp6elmt from fp elmts
 // icube is the imaginary elmt to the cube
 func (e *E6) MulByFp2(api frontend.API, e1 E6, e2 E2) *E6 {

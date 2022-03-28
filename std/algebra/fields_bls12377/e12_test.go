@@ -17,7 +17,7 @@ limitations under the License.
 package fields_bls12377
 
 import (
-	"math/big"
+	// "math/big"
 	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc"
@@ -370,6 +370,7 @@ type fp12FixedExpo struct {
 	C E12 `gnark:",public"`
 }
 
+/*
 func (circuit *fp12FixedExpo) Define(api frontend.API) error {
 	expected := E12{}
 
@@ -402,6 +403,7 @@ func TestExpFixedExpoFp12(t *testing.T) {
 	assert := test.NewAssert(t)
 	assert.SolvingSucceeded(&circuit, &witness, test.WithCurves(ecc.BW6_761))
 }
+*/
 
 type fp12MulBy034 struct {
 	A    E12 `gnark:",public"`

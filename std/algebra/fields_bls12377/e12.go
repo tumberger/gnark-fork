@@ -343,6 +343,30 @@ func (e *E12) MulBy034(api frontend.API, c3, c4 E2) *E12 {
 	return e
 }
 
+// FrobeniusT2 applies frob to a compressed fp12 elmt
+func (e *E6) FrobeniusT2(api frontend.API, e1 E6) *E6 {
+
+	e.B0.Conjugate(api, e1.B0)
+	e.B1.Conjugate(api, e1.B1).MulByFp(api, e.B1, ext.frobv)
+	e.B2.Conjugate(api, e1.B2).MulByFp(api, e.B2, ext.frobv2)
+
+	e.DivByFp(api, *e, ext.frobw)
+
+	return e
+}
+
+// FrobeniusSquareT2 applies frob**2 to a compressed fp12 elmt
+func (e *E6) FrobeniusSquareT2(api frontend.API, e1 E6) *E6 {
+
+	e.B0 = e1.B0
+	e.B1.MulByFp(api, e1.B1, ext.frob2v)
+	e.B2.MulByFp(api, e1.B2, ext.frob2v2)
+
+	e.DivByFp(api, *e, ext.frob2w)
+
+	return e
+}
+
 // Frobenius applies frob to an fp12 elmt
 func (e *E12) Frobenius(api frontend.API, e1 E12) *E12 {
 
@@ -565,11 +589,10 @@ func (e *E12) DivUnchecked(api frontend.API, e1, e2 E12) *E12 {
 // i.e. z^(p^4-p^2+1)=1, e.g. in GT
 func (e *E12) CompressT2(api frontend.API) E6 {
 
-	var res, tmp, one E6
+	var res, one E6
 	one.SetOne(api)
-	tmp.Inverse(api, e.C1)
 	res.Add(api, e.C0, one).
-		Mul(api, res, tmp)
+		DivUnchecked(api, res, e.C1)
 
 	return res
 }
@@ -584,8 +607,7 @@ func (e *E6) DecompressT2(api frontend.API) E12 {
 	num.C1.SetOne(api)
 	denum.C0 = *e
 	denum.C1.SetOne(api).Neg(api, denum.C1)
-	res.Inverse(api, denum).
-		Mul(api, res, num)
+	res.DivUnchecked(api, num, denum)
 
 	return res
 }
@@ -595,8 +617,8 @@ func (e *E6) CyclotomicSquareT2(api frontend.API, e1 E6) *E6 {
 	D.SetZero(api)
 	D.B1.SetOne(api)
 	num.Square(api, e1).Add(api, num, D)
-	denum.Add(api, e1, e1).Inverse(api, denum)
-	e.Mul(api, num, denum)
+	denum.Add(api, e1, e1)
+	e.DivUnchecked(api, num, denum)
 	return e
 }
 
@@ -605,8 +627,8 @@ func (e *E6) CyclotomicMulT2(api frontend.API, e1, e2 E6) *E6 {
 	D.SetZero(api)
 	D.B1.SetOne(api)
 	num.Mul(api, e1, e2).Add(api, num, D)
-	denum.Add(api, e1, e2).Inverse(api, denum)
-	e.Mul(api, num, denum)
+	denum.Add(api, e1, e2)
+	e.DivUnchecked(api, num, denum)
 	return e
 }
 
@@ -646,25 +668,21 @@ func (e *E6) nSquareT2(api frontend.API, n int) {
 // Expt compute e1**exponent, where the exponent is hardcoded
 // This function is only used for the final expo of the pairing for bls12377, so the exponent is supposed to be hardcoded
 // and on 64 bits.
-func (e *E12) Expt(api frontend.API, e1 E12, exponent uint64) *E12 {
+func (e *E6) Expt(api frontend.API, e1 E6, exponent uint64) *E6 {
 
 	res := e1
 
-	res.nSquareKarabina(api, 5)
-	res.DecompressKarabina(api, res)
-	res.Mul(api, res, e1)
+	res.nSquareT2(api, 5)
+	res.CyclotomicMulT2(api, res, e1)
 	x33 := res
-	res.nSquareKarabina(api, 7)
-	res.DecompressKarabina(api, res)
-	res.Mul(api, res, x33)
-	res.nSquareKarabina(api, 4)
-	res.DecompressKarabina(api, res)
-	res.Mul(api, res, e1)
-	res.CyclotomicSquareGS(api, res)
-	res.Mul(api, res, e1)
-	res.nSquareKarabina(api, 46)
-	res.DecompressKarabina(api, res)
-	res.Mul(api, res, e1)
+	res.nSquareT2(api, 7)
+	res.CyclotomicMulT2(api, res, x33)
+	res.nSquareT2(api, 4)
+	res.CyclotomicMulT2(api, res, e1)
+	res.CyclotomicSquareT2(api, res)
+	res.CyclotomicMulT2(api, res, e1)
+	res.nSquareT2(api, 46)
+	res.CyclotomicMulT2(api, res, e1)
 
 	*e = res
 
