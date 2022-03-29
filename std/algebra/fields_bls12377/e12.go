@@ -613,12 +613,13 @@ func (e *E6) DecompressT2(api frontend.API) E12 {
 }
 
 func (e *E6) CyclotomicSquareT2(api frontend.API, e1 E6) *E6 {
-	var D, num, denum E6
+	var D, t E6
 	D.SetZero(api)
 	D.B1.SetOne(api)
-	num.Square(api, e1).Add(api, num, D)
-	denum.Add(api, e1, e1)
-	e.DivUnchecked(api, num, denum)
+
+	t.DivUnchecked(api, D, e1).Add(api, t, e1)
+	e.DivByFp(api, t, 2)
+
 	return e
 }
 
