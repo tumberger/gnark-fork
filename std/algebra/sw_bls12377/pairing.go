@@ -75,23 +75,19 @@ func MillerLoop(api frontend.API, P G1Affine, Q G2Affine) fields_bls12377.E12 {
 func FinalExponentiation(api frontend.API, e1 fields_bls12377.E12) fields_bls12377.E12 {
 	const genT = ateLoop
 
-	result := e1
-
-	// https://eprint.iacr.org/2016/130.pdf
-	var t [3]fields_bls12377.E12
-
 	// easy part
-	t[0].Conjugate(api, result)
-	t[0].DivUnchecked(api, t[0], result)
-	result.FrobeniusSquare(api, t[0]).
-		Mul(api, result, t[0])
+	_result := fields_bls12377.E6{}
+	t := fields_bls12377.E12{}
+	t.FrobeniusSquare(api, e1).
+		Mul(api, e1, t)
+	_result.DivUnchecked(api, t.C0, t.C1).
+		Neg(api, _result)
 
 	// hard part (up to permutation)
 	// Daiki Hayashida and Kenichiro Hayasaka
 	// and Tadanori Teruya
 	// https://eprint.iacr.org/2020/875.pdf
 	var _t [3]fields_bls12377.E6
-	_result := result.CompressT2(api)
 
 	_t[0].CyclotomicSquareT2(api, _result)
 	_t[1].Expt(api, _result, genT)
@@ -112,9 +108,7 @@ func FinalExponentiation(api frontend.API, e1 fields_bls12377.E12) fields_bls123
 	_t[1].CyclotomicMulT2(api, _t[1], _t[0])
 	_result.CyclotomicMulT2(api, _result, _t[1])
 
-	result = _result.DecompressT2(api)
-
-	return result
+	return _result.DecompressT2(api)
 }
 
 // DoubleAndAddStep
