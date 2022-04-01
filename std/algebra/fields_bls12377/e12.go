@@ -673,28 +673,16 @@ func (e *E6) Expt(api frontend.API, e1 E6, exponent uint64) *E6 {
 
 	res := e1
 
-	_res := res.DecompressT2(api)
-	_res.nSquareKarabina(api, 5)
-	_res.DecompressKarabina(api, _res)
-	res = _res.CompressT2(api)
+	res.nSquareT2(api, 5)
 	res.CyclotomicMulT2(api, res, e1)
 	x33 := res
-	_res = res.DecompressT2(api)
-	_res.nSquareKarabina(api, 7)
-	_res.DecompressKarabina(api, _res)
-	res = _res.CompressT2(api)
+	res.nSquareT2(api, 7)
 	res.CyclotomicMulT2(api, res, x33)
-	_res = res.DecompressT2(api)
-	_res.nSquareKarabina(api, 4)
-	_res.DecompressKarabina(api, _res)
-	res = _res.CompressT2(api)
+	res.nSquareT2(api, 4)
 	res.CyclotomicMulT2(api, res, e1)
 	res.CyclotomicSquareT2(api, res)
 	res.CyclotomicMulT2(api, res, e1)
-	_res = res.DecompressT2(api)
-	_res.nSquareKarabina(api, 46)
-	_res.DecompressKarabina(api, _res)
-	res = _res.CompressT2(api)
+	res.nSquareT2(api, 46)
 	res.CyclotomicMulT2(api, res, e1)
 
 	*e = res
