@@ -636,26 +636,31 @@ func (e *E24) nSquare(api frontend.API, n int) {
 	}
 }
 
+// nSquareT2 repeated compressed cyclotmic square
+func (e *E12) nSquareT2(api frontend.API, n int) {
+	for i := 0; i < n; i++ {
+		e.CyclotomicSquareT2(api, *e)
+	}
+}
+
 // Expt compute e1**exponent, where the exponent is hardcoded
 // This function is only used for the final expo of the pairing for bls24315, so the exponent is supposed to be hardcoded and on 32 bits.
-func (e *E24) Expt(api frontend.API, x E24, exponent uint64) *E24 {
+func (e *E12) Expt(api frontend.API, x E12, exponent uint64) *E12 {
 
-	res := E24{}
-	xInv := E24{}
+	res := E12{}
+	xInv := E12{}
 	res = x
-	xInv.Conjugate(api, x)
+	xInv.Neg(api, x)
 
-	res.nSquare(api, 2)
-	res.Mul(api, res, xInv)
-	res.nSquareCompressed(api, 8)
-	res.Decompress(api, res)
-	res.Mul(api, res, xInv)
-	res.nSquare(api, 2)
-	res.Mul(api, res, x)
-	res.nSquareCompressed(api, 20)
-	res.Decompress(api, res)
-	res.Mul(api, res, xInv)
-	res.Conjugate(api, res)
+	res.nSquareT2(api, 2)
+	res.CyclotomicMulT2(api, res, xInv)
+	res.nSquareT2(api, 8)
+	res.CyclotomicMulT2(api, res, xInv)
+	res.nSquareT2(api, 2)
+	res.CyclotomicMulT2(api, res, x)
+	res.nSquareT2(api, 20)
+	res.CyclotomicMulT2(api, res, xInv)
+	res.Neg(api, res)
 
 	*e = res
 
@@ -716,5 +721,93 @@ func (e *E24) FrobeniusQuad(api frontend.API, x E24) *E24 {
 	e.D1.C1.Neg(api, x.D1.C1)
 	e.D1.C2.MulByFp(api, x.D1.C2, ext.frobCoeff12)
 
+	return e
+}
+
+// FrobeniusT2 applies frob to a compressed fp24 elmt
+func (e *E12) FrobeniusT2(api frontend.API, x E12) *E12 {
+
+	e.C0.B0.Conjugate(api, x.C0.B0)
+	e.C0.B1.Conjugate(api, x.C0.B1).MulByFp(api, e.C0.B1, ext.frobCoeff0)
+	e.C1.B0.Conjugate(api, x.C1.B0).MulByFp(api, e.C1.B0, ext.frobCoeff1)
+	e.C1.B1.Conjugate(api, x.C1.B1).MulByFp(api, e.C1.B1, ext.frobCoeff2)
+	e.C2.B0.Conjugate(api, x.C2.B0).MulByFp(api, e.C2.B0, ext.frobCoeff3)
+	e.C2.B1.Conjugate(api, x.C2.B1).MulByFp(api, e.C2.B1, ext.frobCoeff4)
+
+	e.DivByFp(api, *e, ext.frobCoeff5)
+
+	return e
+}
+
+// FrobeniusSquareT2 applies frob**2 to a compressed fp24 elmt
+func (e *E12) FrobeniusSquareT2(api frontend.API, x E12) *E12 {
+
+	e.C0.Conjugate(api, x.C0)
+	e.C1.Conjugate(api, x.C1).MulByFp(api, e.C1, ext.frobCoeff3)
+	e.C2.Conjugate(api, x.C2).MulByFp(api, e.C2, ext.frobCoeff2)
+
+	e.DivByFp(api, *e, ext.frobCoeff1)
+
+	return e
+}
+
+// FrobeniusQuadT2 applies frob**4 to a compressed fp24 elmt
+func (e *E12) FrobeniusQuadT2(api frontend.API, x E12) *E12 {
+
+	e.C0 = x.C0
+	e.C1.MulByFp(api, x.C1, ext.frobCoeff2)
+	e.C2.MulByFp(api, x.C2, ext.frobCoeff11)
+
+	e.DivByFp(api, *e, ext.frobCoeff3)
+
+	return e
+}
+
+// Compress E24 element to half its size
+// e must be in the cyclotomic subgroup
+// i.e. z^(p^8-p^4+1)=1, e.g. in GT
+func (e *E24) CompressT2(api frontend.API) E12 {
+
+	var res, one E12
+	one.SetOne()
+	res.Add(api, e.D0, one).
+		DivUnchecked(api, res, e.D1)
+
+	return res
+}
+
+// DecompressT2 a compressed E24 element
+// e must be in the cyclotomic subgroup
+// i.e. z^(p^8-p^4+1)=1, e.g. in GT
+func (e *E12) DecompressT2(api frontend.API) E24 {
+
+	var res, num, denum E24
+	num.D0 = *e
+	num.D1.SetOne()
+	denum.D0 = *e
+	denum.D1.SetOne().Neg(api, denum.D1)
+	res.DivUnchecked(api, num, denum)
+
+	return res
+}
+
+func (e *E12) CyclotomicSquareT2(api frontend.API, e1 E12) *E12 {
+	var D, t E12
+	D.SetZero()
+	D.C1.SetOne()
+
+	t.DivUnchecked(api, D, e1).Add(api, t, e1)
+	e.DivByFp(api, t, 2)
+
+	return e
+}
+
+func (e *E12) CyclotomicMulT2(api frontend.API, e1, e2 E12) *E12 {
+	var D, num, denum E12
+	D.SetZero()
+	D.C1.SetOne()
+	num.Mul(api, e1, e2).Add(api, num, D)
+	denum.Add(api, e1, e2)
+	e.DivUnchecked(api, num, denum)
 	return e
 }

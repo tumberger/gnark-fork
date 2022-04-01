@@ -24,6 +24,8 @@ import (
 	"github.com/consensys/gnark/std/algebra/fields_bls24315"
 )
 
+const ateLoop = 3218079743
+
 // LineEvaluation represents a sparse Fp12 Elmt (result of the line evaluation)
 type LineEvaluation struct {
 	R0, R1 fields_bls24315.E4
@@ -80,50 +82,48 @@ func MillerLoop(api frontend.API, P G1Affine, Q G2Affine) fields_bls24315.E24 {
 
 // FinalExponentiation computes the final expo x**(p**12-1)(p**4+1)(p**8 - p**4 +1)/r
 func FinalExponentiation(api frontend.API, e1 fields_bls24315.E24) fields_bls24315.E24 {
-	const ateLoop = 3218079743
 	const genT = ateLoop
-	result := e1
-
-	// https://eprint.iacr.org/2012/232.pdf, section 7
-	var t [9]fields_bls24315.E24
 
 	// easy part
-	t[0].Conjugate(api, result)
-	t[0].DivUnchecked(api, t[0], result)
-	result.FrobeniusQuad(api, t[0]).
-		Mul(api, result, t[0])
+	// compress e1 directly by raising it to p**12-1 (-e1.D0/e1.D1)
+	var result fields_bls24315.E12
+	var t [3]fields_bls24315.E12
+	t[0].DivUnchecked(api, e1.D0, e1.D1).
+		Neg(api, t[0])
+	result.FrobeniusQuadT2(api, t[0]).
+		CyclotomicMulT2(api, result, t[0])
 
 	// hard part (api, up to permutation)
 	// Daiki Hayashida and Kenichiro Hayasaka
 	// and Tadanori Teruya
 	// https://eprint.iacr.org/2020/875.pdf
-	// 3*Phi_24(api, p)/r = (api, u-1)² * (api, u+p) * (api, u²+p²) * (api, u⁴+p⁴-1) + 3
-	t[0].CyclotomicSquare(api, result)
+	// 3*Phi_24(p)/r = (u-1)² * (u+p) * (u²+p²) * (u⁴+p⁴-1) + 3
+	t[0].CyclotomicSquareT2(api, result)
 	t[1].Expt(api, result, genT)
-	t[2].Conjugate(api, result)
-	t[1].Mul(api, t[1], t[2])
+	t[2].Neg(api, result)
+	t[1].CyclotomicMulT2(api, t[1], t[2])
 	t[2].Expt(api, t[1], genT)
-	t[1].Conjugate(api, t[1])
-	t[1].Mul(api, t[1], t[2])
+	t[1].Neg(api, t[1])
+	t[1].CyclotomicMulT2(api, t[1], t[2])
 	t[2].Expt(api, t[1], genT)
-	t[1].Frobenius(api, t[1])
-	t[1].Mul(api, t[1], t[2])
-	result.Mul(api, result, t[0])
+	t[1].FrobeniusT2(api, t[1])
+	t[1].CyclotomicMulT2(api, t[1], t[2])
+	result.CyclotomicMulT2(api, result, t[0])
 	t[0].Expt(api, t[1], genT)
 	t[2].Expt(api, t[0], genT)
-	t[0].FrobeniusSquare(api, t[1])
-	t[2].Mul(api, t[0], t[2])
+	t[0].FrobeniusSquareT2(api, t[1])
+	t[2].CyclotomicMulT2(api, t[0], t[2])
 	t[1].Expt(api, t[2], genT)
 	t[1].Expt(api, t[1], genT)
 	t[1].Expt(api, t[1], genT)
 	t[1].Expt(api, t[1], genT)
-	t[0].FrobeniusQuad(api, t[2])
-	t[0].Mul(api, t[0], t[1])
-	t[2].Conjugate(api, t[2])
-	t[0].Mul(api, t[0], t[2])
-	result.Mul(api, result, t[0])
+	t[0].FrobeniusQuadT2(api, t[2])
+	t[0].CyclotomicMulT2(api, t[0], t[1])
+	t[2].Neg(api, t[2])
+	t[0].CyclotomicMulT2(api, t[0], t[2])
+	result.CyclotomicMulT2(api, result, t[0])
 
-	return result
+	return result.DecompressT2(api)
 }
 
 // DoubleAndAddStep

@@ -336,6 +336,21 @@ func (e *E12) DivUnchecked(api frontend.API, e1, e2 E12) *E12 {
 	return e
 }
 
+// DivByFp fivides a fp12 elmt by a fp elmt
+func (e *E12) DivByFp(api frontend.API, e1 E12, c interface{}) *E12 {
+	res := E12{}
+
+	res.C0.DivByFp(api, e1.C0, c)
+	res.C1.DivByFp(api, e1.C1, c)
+	res.C2.DivByFp(api, e1.C2, c)
+
+	e.C0 = res.C0
+	e.C1 = res.C1
+	e.C2 = res.C2
+
+	return e
+}
+
 // MustBeEqual constraint self to be equal to other into the given constraint system
 func (e *E12) MustBeEqual(api frontend.API, other E12) {
 	e.C0.MustBeEqual(api, other.C0)

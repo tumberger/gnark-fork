@@ -181,6 +181,13 @@ func (e *E2) DivUnchecked(api frontend.API, e1, e2 E2) *E2 {
 	return e
 }
 
+// DivByFp divides an fp2 elmt by an fp elmt
+func (e *E2) DivByFp(api frontend.API, e1 E2, c interface{}) *E2 {
+	e.A0 = api.DivUnchecked(e1.A0, c)
+	e.A1 = api.DivUnchecked(e1.A1, c)
+	return e
+}
+
 var InverseE2Hint = func(curve ecc.ID, inputs []*big.Int, res []*big.Int) error {
 	var a, c bls24315.E2
 

@@ -188,6 +188,19 @@ func (e *E4) DivUnchecked(api frontend.API, e1, e2 E4) *E4 {
 	return e
 }
 
+// DivByFp fivides a fp4 elmt by a fp elmt
+func (e *E4) DivByFp(api frontend.API, e1 E4, c interface{}) *E4 {
+	res := E4{}
+
+	res.B0.DivByFp(api, e1.B0, c)
+	res.B1.DivByFp(api, e1.B1, c)
+
+	e.B0 = res.B0
+	e.B1 = res.B1
+
+	return e
+}
+
 var InverseE4Hint = func(curve ecc.ID, inputs []*big.Int, res []*big.Int) error {
 	var a, c bls24315.E4
 
