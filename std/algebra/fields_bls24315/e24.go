@@ -645,22 +645,24 @@ func (e *E12) nSquareT2(api frontend.API, n int) {
 
 // Expt compute e1**exponent, where the exponent is hardcoded
 // This function is only used for the final expo of the pairing for bls24315, so the exponent is supposed to be hardcoded and on 32 bits.
-func (e *E12) Expt(api frontend.API, x E12, exponent uint64) *E12 {
+func (e *E24) Expt(api frontend.API, x E24, exponent uint64) *E24 {
 
-	res := E12{}
-	xInv := E12{}
+	res := E24{}
+	xInv := E24{}
 	res = x
-	xInv.Neg(api, x)
+	xInv.Conjugate(api, x)
 
-	res.nSquareT2(api, 2)
-	res.CyclotomicMulT2(api, res, xInv)
-	res.nSquareT2(api, 8)
-	res.CyclotomicMulT2(api, res, xInv)
-	res.nSquareT2(api, 2)
-	res.CyclotomicMulT2(api, res, x)
-	res.nSquareT2(api, 20)
-	res.CyclotomicMulT2(api, res, xInv)
-	res.Neg(api, res)
+	res.nSquare(api, 2)
+	res.Mul(api, res, xInv)
+	res.nSquareCompressed(api, 8)
+	res.Decompress(api, res)
+	res.Mul(api, res, xInv)
+	res.nSquare(api, 2)
+	res.Mul(api, res, x)
+	res.nSquareCompressed(api, 20)
+	res.Decompress(api, res)
+	res.Mul(api, res, xInv)
+	res.Conjugate(api, res)
 
 	*e = res
 

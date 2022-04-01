@@ -646,21 +646,25 @@ func (e *E6) nSquareT2(api frontend.API, n int) {
 // Expt compute e1**exponent, where the exponent is hardcoded
 // This function is only used for the final expo of the pairing for bls12377, so the exponent is supposed to be hardcoded
 // and on 64 bits.
-func (e *E6) Expt(api frontend.API, e1 E6, exponent uint64) *E6 {
+func (e *E12) Expt(api frontend.API, e1 E12, exponent uint64) *E12 {
 
 	res := e1
 
-	res.nSquareT2(api, 5)
-	res.CyclotomicMulT2(api, res, e1)
+	res.nSquareKarabina(api, 5)
+	res.DecompressKarabina(api, res)
+	res.Mul(api, res, e1)
 	x33 := res
-	res.nSquareT2(api, 7)
-	res.CyclotomicMulT2(api, res, x33)
-	res.nSquareT2(api, 4)
-	res.CyclotomicMulT2(api, res, e1)
-	res.CyclotomicSquareT2(api, res)
-	res.CyclotomicMulT2(api, res, e1)
-	res.nSquareT2(api, 46)
-	res.CyclotomicMulT2(api, res, e1)
+	res.nSquareKarabina(api, 7)
+	res.DecompressKarabina(api, res)
+	res.Mul(api, res, x33)
+	res.nSquareKarabina(api, 4)
+	res.DecompressKarabina(api, res)
+	res.Mul(api, res, e1)
+	res.CyclotomicSquareGS(api, res)
+	res.Mul(api, res, e1)
+	res.nSquareKarabina(api, 46)
+	res.DecompressKarabina(api, res)
+	res.Mul(api, res, e1)
 
 	*e = res
 

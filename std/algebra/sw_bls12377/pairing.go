@@ -88,26 +88,28 @@ func FinalExponentiation(api frontend.API, e1 fields_bls12377.E12) fields_bls123
 	// Daiki Hayashida and Kenichiro Hayasaka
 	// and Tadanori Teruya
 	// https://eprint.iacr.org/2020/875.pdf
-	t[0].CyclotomicSquareT2(api, result)
-	t[1].Expt(api, result, genT)
-	t[2].Neg(api, result) // conjugate in compressed form
-	t[1].CyclotomicMulT2(api, t[1], t[2])
-	t[2].Expt(api, t[1], genT)
-	t[1].Neg(api, t[1]) // conjugate in compressed form
-	t[1].CyclotomicMulT2(api, t[1], t[2])
-	t[2].Expt(api, t[1], genT)
-	t[1].FrobeniusT2(api, t[1])
-	t[1].CyclotomicMulT2(api, t[1], t[2])
-	result.CyclotomicMulT2(api, result, t[0])
-	t[0].Expt(api, t[1], genT)
-	t[2].Expt(api, t[0], genT)
-	t[0].FrobeniusSquareT2(api, t[1])
-	t[1].Neg(api, t[1]) // conjugate in compressed form
-	t[1].CyclotomicMulT2(api, t[1], t[2])
-	t[1].CyclotomicMulT2(api, t[1], t[0])
-	result.CyclotomicMulT2(api, result, t[1])
+	var _t [3]fields_bls12377.E12
+	_result := result.DecompressT2(api)
+	_t[0].CyclotomicSquareGS(api, _result)
+	_t[1].Expt(api, _result, genT)
+	_t[2].Conjugate(api, _result)
+	_t[1].Mul(api, _t[1], _t[2])
+	_t[2].Expt(api, _t[1], genT)
+	_t[1].Conjugate(api, _t[1])
+	_t[1].Mul(api, _t[1], _t[2])
+	_t[2].Expt(api, _t[1], genT)
+	_t[1].Frobenius(api, _t[1])
+	_t[1].Mul(api, _t[1], _t[2])
+	_result.Mul(api, _result, _t[0])
+	_t[0].Expt(api, _t[1], genT)
+	_t[2].Expt(api, _t[0], genT)
+	_t[0].FrobeniusSquare(api, _t[1])
+	_t[1].Conjugate(api, _t[1])
+	_t[1].Mul(api, _t[1], _t[2])
+	_t[1].Mul(api, _t[1], _t[0])
+	_result.Mul(api, _result, _t[1])
 
-	return result.DecompressT2(api)
+	return _result
 }
 
 // DoubleAndAddStep
