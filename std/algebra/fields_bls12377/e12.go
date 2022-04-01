@@ -567,7 +567,7 @@ func (e *E12) DivUnchecked(api frontend.API, e1, e2 E12) *E12 {
 func (e *E12) CompressT2(api frontend.API) E6 {
 
 	var res, one E6
-	one.SetOne(api)
+	one.SetOne()
 	res.Add(api, e.C0, one).
 		DivUnchecked(api, res, e.C1)
 
@@ -581,9 +581,9 @@ func (e *E6) DecompressT2(api frontend.API) E12 {
 
 	var res, num, denum E12
 	num.C0 = *e
-	num.C1.SetOne(api)
+	num.C1.SetOne()
 	denum.C0 = *e
-	denum.C1.SetOne(api).Neg(api, denum.C1)
+	denum.C1.SetOne().Neg(api, denum.C1)
 	res.DivUnchecked(api, num, denum)
 
 	return res
@@ -591,8 +591,8 @@ func (e *E6) DecompressT2(api frontend.API) E12 {
 
 func (e *E6) CyclotomicSquareT2(api frontend.API, e1 E6) *E6 {
 	var D, t E6
-	D.SetZero(api)
-	D.B1.SetOne(api)
+	D.SetZero()
+	D.B1.SetOne()
 
 	t.DivUnchecked(api, D, e1).Add(api, t, e1)
 	e.DivByFp(api, t, 2)
@@ -602,8 +602,8 @@ func (e *E6) CyclotomicSquareT2(api frontend.API, e1 E6) *E6 {
 
 func (e *E6) CyclotomicMulT2(api frontend.API, e1, e2 E6) *E6 {
 	var D, num, denum E6
-	D.SetZero(api)
-	D.B1.SetOne(api)
+	D.SetZero()
+	D.B1.SetOne()
 	num.Mul(api, e1, e2).Add(api, num, D)
 	denum.Add(api, e1, e2)
 	e.DivUnchecked(api, num, denum)
