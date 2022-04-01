@@ -76,39 +76,38 @@ func FinalExponentiation(api frontend.API, e1 fields_bls12377.E12) fields_bls123
 	const genT = ateLoop
 
 	// easy part
-	_result := fields_bls12377.E6{}
-	t := fields_bls12377.E12{}
-	t.FrobeniusSquare(api, e1).
-		Mul(api, e1, t)
-	_result.DivUnchecked(api, t.C0, t.C1).
-		Neg(api, _result)
+	// compress e1 directly by raising it to p**6-1 (-e1.C0/e1.C1)
+	var result fields_bls12377.E6
+	var t [3]fields_bls12377.E6
+	t[0].DivUnchecked(api, e1.C0, e1.C1).
+		Neg(api, t[0])
+	result.FrobeniusSquareT2(api, t[0]).
+		CyclotomicMulT2(api, result, t[0])
 
 	// hard part (up to permutation)
 	// Daiki Hayashida and Kenichiro Hayasaka
 	// and Tadanori Teruya
 	// https://eprint.iacr.org/2020/875.pdf
-	var _t [3]fields_bls12377.E6
+	t[0].CyclotomicSquareT2(api, result)
+	t[1].Expt(api, result, genT)
+	t[2].Neg(api, result) // conjugate in compressed form
+	t[1].CyclotomicMulT2(api, t[1], t[2])
+	t[2].Expt(api, t[1], genT)
+	t[1].Neg(api, t[1]) // conjugate in compressed form
+	t[1].CyclotomicMulT2(api, t[1], t[2])
+	t[2].Expt(api, t[1], genT)
+	t[1].FrobeniusT2(api, t[1])
+	t[1].CyclotomicMulT2(api, t[1], t[2])
+	result.CyclotomicMulT2(api, result, t[0])
+	t[0].Expt(api, t[1], genT)
+	t[2].Expt(api, t[0], genT)
+	t[0].FrobeniusSquareT2(api, t[1])
+	t[1].Neg(api, t[1]) // conjugate in compressed form
+	t[1].CyclotomicMulT2(api, t[1], t[2])
+	t[1].CyclotomicMulT2(api, t[1], t[0])
+	result.CyclotomicMulT2(api, result, t[1])
 
-	_t[0].CyclotomicSquareT2(api, _result)
-	_t[1].Expt(api, _result, genT)
-	_t[2].Neg(api, _result) // conjugate in compressed form
-	_t[1].CyclotomicMulT2(api, _t[1], _t[2])
-	_t[2].Expt(api, _t[1], genT)
-	_t[1].Neg(api, _t[1]) // conjugate in compressed form
-	_t[1].CyclotomicMulT2(api, _t[1], _t[2])
-	_t[2].Expt(api, _t[1], genT)
-	_t[1].FrobeniusT2(api, _t[1])
-	_t[1].CyclotomicMulT2(api, _t[1], _t[2])
-	_result.CyclotomicMulT2(api, _result, _t[0])
-	_t[0].Expt(api, _t[1], genT)
-	_t[2].Expt(api, _t[0], genT)
-	_t[0].FrobeniusSquareT2(api, _t[1])
-	_t[1].Neg(api, _t[1]) // conjugate in compressed form
-	_t[1].CyclotomicMulT2(api, _t[1], _t[2])
-	_t[1].CyclotomicMulT2(api, _t[1], _t[0])
-	_result.CyclotomicMulT2(api, _result, _t[1])
-
-	return _result.DecompressT2(api)
+	return result.DecompressT2(api)
 }
 
 // DoubleAndAddStep
