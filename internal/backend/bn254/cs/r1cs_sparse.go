@@ -85,7 +85,7 @@ func (cs *SparseR1CS) Solve(witness []fr.Element, opt backend.ProverConfig) ([]f
 	}
 
 	// keep track of wire that have a value
-	solution, err := newSolution(nbVariables, opt.HintFunctions, cs.MHintsDependencies, cs.Coefficients)
+	solution, err := newSolution(nbVariables, opt.HintFunctions, cs.MHintsDependencies, cs.MHints, cs.Coefficients)
 	if err != nil {
 		return solution.values, err
 	}
@@ -124,7 +124,7 @@ func (cs *SparseR1CS) Solve(witness []fr.Element, opt backend.ProverConfig) ([]f
 		panic("solver didn't instantiate all wires")
 	}
 
-	log.Debug().Str("took", fmt.Sprintf("%dms", time.Since(start).Milliseconds())).Msg("constraint system solver done")
+	log.Debug().Dur("took", time.Since(start)).Msg("constraint system solver done")
 
 	return solution.values, nil
 

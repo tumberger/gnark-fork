@@ -4,10 +4,9 @@ import (
 	"math"
 	"sync"
 
+	"github.com/consensys/gnark"
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/std/algebra/fields_bls12377"
-	"github.com/consensys/gnark/std/algebra/fields_bls24315"
 	"github.com/consensys/gnark/std/algebra/sw_bls12377"
 	"github.com/consensys/gnark/std/algebra/sw_bls24315"
 	"github.com/consensys/gnark/std/hash/mimc"
@@ -31,7 +30,7 @@ func registerSnippet(name string, snippet snippet, curves ...ecc.ID) {
 		panic("circuit " + name + " already registered")
 	}
 	if len(curves) == 0 {
-		curves = ecc.Implemented()
+		curves = gnark.Curves()
 	}
 	snippets[name] = Circuit{makeSnippetCircuit(snippet), curves}
 }
@@ -81,9 +80,6 @@ func initSnippets() {
 	})
 
 	registerSnippet("pairing_bls12377", func(api frontend.API, newVariable func() frontend.Variable) {
-		ateLoop := uint64(9586122913090633729)
-		ext := fields_bls12377.GetBLS12377ExtensionFp12(api)
-		pairingInfo := sw_bls12377.PairingContext{AteLoop: ateLoop, Extension: ext}
 
 		var dummyG1 sw_bls12377.G1Affine
 		var dummyG2 sw_bls12377.G2Affine
@@ -94,19 +90,14 @@ func initSnippets() {
 		dummyG2.Y.A0 = newVariable()
 		dummyG2.Y.A1 = newVariable()
 
-		var resMillerLoop fields_bls12377.E12
 		// e(psi0, -gamma)*e(-πC, -δ)*e(πA, πB)
-		sw_bls12377.MillerLoop(api, dummyG1, dummyG2, &resMillerLoop, pairingInfo)
+		resMillerLoop, _ := sw_bls12377.MillerLoop(api, []sw_bls12377.G1Affine{dummyG1}, []sw_bls12377.G2Affine{dummyG2})
 
 		// performs the final expo
-		var resPairing fields_bls12377.E12
-		resPairing.FinalExponentiation(api, resMillerLoop, pairingInfo.AteLoop, pairingInfo.Extension)
+		_ = sw_bls12377.FinalExponentiation(api, resMillerLoop)
 	}, ecc.BW6_761)
 
 	registerSnippet("pairing_bls24315", func(api frontend.API, newVariable func() frontend.Variable) {
-		ateLoop := uint64(3218079743)
-		ext := fields_bls24315.GetBLS24315ExtensionFp24(api)
-		pairingInfo := sw_bls24315.PairingContext{AteLoop: ateLoop, Extension: ext}
 
 		var dummyG1 sw_bls24315.G1Affine
 		var dummyG2 sw_bls24315.G2Affine
@@ -121,13 +112,11 @@ func initSnippets() {
 		dummyG2.Y.B1.A0 = newVariable()
 		dummyG2.Y.B1.A1 = newVariable()
 
-		var resMillerLoop fields_bls24315.E24
 		// e(psi0, -gamma)*e(-πC, -δ)*e(πA, πB)
-		sw_bls24315.MillerLoop(api, dummyG1, dummyG2, &resMillerLoop, pairingInfo)
+		resMillerLoop, _ := sw_bls24315.MillerLoop(api, []sw_bls24315.G1Affine{dummyG1}, []sw_bls24315.G2Affine{dummyG2})
 
 		// performs the final expo
-		var resPairing fields_bls24315.E24
-		resPairing.FinalExponentiation(api, resMillerLoop, pairingInfo.AteLoop, pairingInfo.Extension)
+		_ = sw_bls24315.FinalExponentiation(api, resMillerLoop)
 	}, ecc.BW6_633)
 
 }

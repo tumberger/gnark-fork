@@ -23,6 +23,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/consensys/gnark"
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/backend/groth16"
@@ -55,7 +56,7 @@ type Assert struct {
 // the first call to assert.ProverSucceeded/Failed will compile the circuit for n curves, m backends
 // and subsequent calls will re-use the result of the compilation, if available.
 func NewAssert(t *testing.T) *Assert {
-	return &Assert{t, require.New(t), make(map[string]frontend.CompiledConstraintSystem)}
+	return &Assert{t: t, Assertions: require.New(t), compiled: make(map[string]frontend.CompiledConstraintSystem)}
 }
 
 // Run runs the test function fn as a subtest. The subtest is parametrized by
@@ -102,15 +103,19 @@ func (assert *Assert) ProverSucceeded(circuit frontend.Circuit, validAssignment 
 		if opt.witnessSerialization {
 			// do a round trip marshalling test
 			assert.Run(func(assert *Assert) {
+				assert.t.Parallel()
 				assert.marshalWitness(validWitness, curve, JSON)
 			}, curve.String(), "marshal/json")
 			assert.Run(func(assert *Assert) {
+				assert.t.Parallel()
 				assert.marshalWitness(validWitness, curve, Binary)
 			}, curve.String(), "marshal/binary")
 			assert.Run(func(assert *Assert) {
+				assert.t.Parallel()
 				assert.marshalWitness(validPublicWitness, curve, JSON, frontend.PublicOnly())
 			}, curve.String(), "marshal-public/json")
 			assert.Run(func(assert *Assert) {
+				assert.t.Parallel()
 				assert.marshalWitness(validPublicWitness, curve, Binary, frontend.PublicOnly())
 			}, curve.String(), "marshal-public/binary")
 		}
@@ -129,6 +134,8 @@ func (assert *Assert) ProverSucceeded(circuit frontend.Circuit, validAssignment 
 				// must not error with big int test engine (only the curveID is needed for this test)
 				err = IsSolved(circuit, validAssignment, curve, backend.UNKNOWN)
 				checkError(err)
+
+				assert.t.Parallel()
 
 				switch b {
 				case backend.GROTH16:
@@ -203,11 +210,12 @@ func (assert *Assert) ProverFailed(circuit frontend.Circuit, invalidAssignment f
 				ccs, err := assert.compile(circuit, curve, b, opt.compileOpts)
 				checkError(err)
 
-				err = ccs.IsSolved(invalidPublicWitness)
-				mustError(err)
-
 				// must error with big int test engine (only the curveID is needed here)
 				err = IsSolved(circuit, invalidAssignment, curve, backend.UNKNOWN)
+				mustError(err)
+
+				assert.t.Parallel()
+				err = ccs.IsSolved(invalidPublicWitness)
 				mustError(err)
 
 				switch b {
@@ -298,9 +306,6 @@ func (assert *Assert) solvingFailed(circuit frontend.Circuit, invalidAssignment 
 
 	// 1- compile the circuit
 	ccs, err := assert.compile(circuit, curve, b, opt.compileOpts)
-	if err != nil {
-		fmt.Println(reflect.TypeOf(circuit).String())
-	}
 	checkError(err)
 
 	// must error with big int test engine
@@ -391,13 +396,25 @@ func (assert *Assert) fuzzer(fuzzer filler, circuit, w frontend.Circuit, b backe
 	return 0
 }
 
+func (assert *Assert) getCircuitAddr(circuit frontend.Circuit) (uintptr, error) {
+	vCircuit := reflect.ValueOf(circuit)
+	if vCircuit.Kind() != reflect.Ptr {
+		return 0, errors.New("frontend.Circuit methods must be defined on pointer receiver")
+	}
+	return vCircuit.Pointer(), nil
+}
+
 // compile the given circuit for given curve and backend, if not already present in cache
 func (assert *Assert) compile(circuit frontend.Circuit, curveID ecc.ID, backendID backend.ID, compileOpts []frontend.CompileOption) (frontend.CompiledConstraintSystem, error) {
-	key := curveID.String() + backendID.String() + reflect.TypeOf(circuit).String()
+	addr, err := assert.getCircuitAddr(circuit)
+	if err != nil {
+		return nil, err
+	}
+
+	key := fmt.Sprintf("%d%d%s%d", curveID, backendID, reflect.TypeOf(circuit).String(), addr)
 
 	// check if we already compiled it
 	if ccs, ok := assert.compiled[key]; ok {
-		// TODO we may want to check that it was compiled with the same compile options here
 		return ccs, nil
 	}
 
@@ -414,13 +431,11 @@ func (assert *Assert) compile(circuit frontend.Circuit, curveID ecc.ID, backendI
 
 	// else compile it and ensure it is deterministic
 	ccs, err := frontend.Compile(curveID, newBuilder, circuit, compileOpts...)
-	// ccs, err := compiler.Compile(curveID, backendID, circuit, compileOpts...)
 	if err != nil {
 		return nil, err
 	}
 
 	_ccs, err := frontend.Compile(curveID, newBuilder, circuit, compileOpts...)
-	// _ccs, err := compiler.Compile(curveID, backendID, circuit, compileOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrCompilationNotDeterministic, err)
 	}
@@ -429,7 +444,7 @@ func (assert *Assert) compile(circuit frontend.Circuit, curveID ecc.ID, backendI
 		return nil, ErrCompilationNotDeterministic
 	}
 
-	// add the compiled circuit to the cache
+	// // add the compiled circuit to the cache
 	assert.compiled[key] = ccs
 
 	return ccs, nil
@@ -441,7 +456,7 @@ func (assert *Assert) options(opts ...TestingOption) testingConfig {
 	opt := testingConfig{
 		witnessSerialization: true,
 		backends:             backend.Implemented(),
-		curves:               ecc.Implemented(),
+		curves:               gnark.Curves(),
 	}
 	for _, option := range opts {
 		err := option(&opt)
@@ -450,7 +465,7 @@ func (assert *Assert) options(opts ...TestingOption) testingConfig {
 
 	if testing.Short() {
 		// if curves are all there, we just test with bn254
-		if reflect.DeepEqual(opt.curves, ecc.Implemented()) {
+		if reflect.DeepEqual(opt.curves, gnark.Curves()) {
 			opt.curves = []ecc.ID{ecc.BN254}
 		}
 	}

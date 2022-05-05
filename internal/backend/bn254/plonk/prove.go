@@ -18,7 +18,6 @@ package plonk
 
 import (
 	"crypto/sha256"
-	"fmt"
 	"math/big"
 	"math/bits"
 	"runtime"
@@ -63,6 +62,7 @@ type Proof struct {
 
 // Prove from the public data
 func Prove(spr *cs.SparseR1CS, pk *ProvingKey, fullWitness bn254witness.Witness, opt backend.ProverConfig) (*Proof, error) {
+
 	log := logger.Logger().With().Str("curve", spr.CurveID().String()).Int("nbConstraints", len(spr.Constraints)).Str("backend", "plonk").Logger()
 	start := time.Now()
 	// pick a hash function that will be used to derive the challenges
@@ -110,11 +110,18 @@ func Prove(spr *cs.SparseR1CS, pk *ProvingKey, fullWitness bn254witness.Witness,
 		return nil, err
 	}
 
+	// The first challenge is derived using the public data: the commitments to the permutation,
+	// the coefficients of the circuit, and the public inputs.
 	// derive gamma from the Comm(blinded cl), Comm(blinded cr), Comm(blinded co)
-	gamma, err := deriveRandomness(&fs, "gamma", &proof.LRO[0], &proof.LRO[1], &proof.LRO[2])
+	if err := bindPublicData(&fs, "gamma", *pk.Vk, fullWitness[:spr.NbPublicVariables]); err != nil {
+		return nil, err
+	}
+	bgamma, err := fs.ComputeChallenge("gamma")
 	if err != nil {
 		return nil, err
 	}
+	var gamma fr.Element
+	gamma.SetBytes(bgamma)
 
 	// Fiat Shamir this
 	beta, err := deriveRandomness(&fs, "beta")
@@ -364,7 +371,7 @@ func Prove(spr *cs.SparseR1CS, pk *ProvingKey, fullWitness bn254witness.Witness,
 		pk.Vk.KZGSRS,
 	)
 
-	log.Debug().Str("took", fmt.Sprintf("%dms", time.Since(start).Milliseconds())).Msg("prover done")
+	log.Debug().Dur("took", time.Since(start)).Msg("prover done")
 
 	if err != nil {
 		return nil, err
