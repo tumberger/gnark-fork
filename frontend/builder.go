@@ -4,12 +4,11 @@ import (
 	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc"
+	"github.com/consensys/gnark-crypto/field"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/backend/hint"
 	"github.com/consensys/gnark/frontend/schema"
 )
-
-type NewBuilder func(ecc.ID, CompileConfig) (Builder, error)
 
 // Compiler represents a constraint system compiler
 type Compiler interface {
@@ -61,7 +60,7 @@ type Compiler interface {
 }
 
 // Builder represents a constraint system builder
-type Builder interface {
+type Builder[E any, ptE field.Element[E]] interface {
 	API
 	Compiler
 

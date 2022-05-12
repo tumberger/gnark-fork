@@ -79,37 +79,7 @@ func (s *globalStats) Load(path string) error {
 }
 
 func NewSnippetStats(curve ecc.ID, backendID backend.ID, circuit frontend.Circuit) (snippetStats, error) {
-	var newCompiler frontend.NewBuilder
-
-	switch backendID {
-	case backend.GROTH16:
-		newCompiler = r1cs.NewBuilder
-	case backend.PLONK:
-		newCompiler = scs.NewBuilder
-	default:
-		panic("not implemented")
-	}
-
-	// TODO @gbotrel cleanu up
-	var ccs frontend.CompiledConstraintSystem
-	var err error
-	switch curve {
-	case ecc.BN254:
-		ccs, err = frontend.Compile[fr_bn254.Element](newCompiler, circuit, frontend.IgnoreUnconstrainedInputs())
-	case ecc.BLS12_377:
-		ccs, err = frontend.Compile[fr_bls12377.Element](newCompiler, circuit, frontend.IgnoreUnconstrainedInputs())
-	case ecc.BLS12_381:
-		ccs, err = frontend.Compile[fr_bls12381.Element](newCompiler, circuit, frontend.IgnoreUnconstrainedInputs())
-	case ecc.BLS24_315:
-		ccs, err = frontend.Compile[fr_bls24315.Element](newCompiler, circuit, frontend.IgnoreUnconstrainedInputs())
-	case ecc.BW6_633:
-		ccs, err = frontend.Compile[fr_bw6633.Element](newCompiler, circuit, frontend.IgnoreUnconstrainedInputs())
-	case ecc.BW6_761:
-		ccs, err = frontend.Compile[fr_bw6761.Element](newCompiler, circuit, frontend.IgnoreUnconstrainedInputs())
-	default:
-		panic("not implemented")
-	}
-
+	ccs, err := compile(curve, backendID, circuit, []frontend.CompileOption{frontend.IgnoreUnconstrainedInputs()})
 	if err != nil {
 		return snippetStats{}, err
 	}
@@ -145,4 +115,47 @@ type snippetStats struct {
 
 func (cs snippetStats) String() string {
 	return fmt.Sprintf("nbConstraints: %d, nbInternalWires: %d", cs.NbConstraints, cs.NbInternalWires)
+}
+
+func compile(curveID ecc.ID, backendID backend.ID, circuit frontend.Circuit, compileOpts []frontend.CompileOption) (frontend.CompiledConstraintSystem, error) {
+	var _compile func(circuit frontend.Circuit, opts ...frontend.CompileOption) (frontend.CompiledConstraintSystem, error)
+	if backendID == backend.PLONK {
+		switch curveID {
+		case ecc.BN254:
+			_compile = scs.Compile[fr_bn254.Element]
+		case ecc.BLS12_377:
+			_compile = scs.Compile[fr_bls12377.Element]
+		case ecc.BLS12_381:
+			_compile = scs.Compile[fr_bls12381.Element]
+		case ecc.BLS24_315:
+			_compile = scs.Compile[fr_bls24315.Element]
+		case ecc.BW6_633:
+			_compile = scs.Compile[fr_bw6633.Element]
+		case ecc.BW6_761:
+			_compile = scs.Compile[fr_bw6761.Element]
+		default:
+			panic("not implemented")
+		}
+	} else if backendID == backend.GROTH16 {
+		switch curveID {
+		case ecc.BN254:
+			_compile = r1cs.Compile[fr_bn254.Element]
+		case ecc.BLS12_377:
+			_compile = r1cs.Compile[fr_bls12377.Element]
+		case ecc.BLS12_381:
+			_compile = r1cs.Compile[fr_bls12381.Element]
+		case ecc.BLS24_315:
+			_compile = r1cs.Compile[fr_bls24315.Element]
+		case ecc.BW6_633:
+			_compile = r1cs.Compile[fr_bw6633.Element]
+		case ecc.BW6_761:
+			_compile = r1cs.Compile[fr_bw6761.Element]
+		default:
+			panic("not implemented")
+		}
+	} else {
+		panic("not implemented")
+	}
+
+	return _compile(circuit, compileOpts...)
 }

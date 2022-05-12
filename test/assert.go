@@ -411,6 +411,49 @@ func (assert *Assert) getCircuitAddr(circuit frontend.Circuit) (uintptr, error) 
 	return vCircuit.Pointer(), nil
 }
 
+func compile(curveID ecc.ID, backendID backend.ID, circuit frontend.Circuit, compileOpts []frontend.CompileOption) (frontend.CompiledConstraintSystem, error) {
+	var _compile func(circuit frontend.Circuit, opts ...frontend.CompileOption) (frontend.CompiledConstraintSystem, error)
+	if backendID == backend.PLONK {
+		switch curveID {
+		case ecc.BN254:
+			_compile = scs.Compile[fr_bn254.Element]
+		case ecc.BLS12_377:
+			_compile = scs.Compile[fr_bls12377.Element]
+		case ecc.BLS12_381:
+			_compile = scs.Compile[fr_bls12381.Element]
+		case ecc.BLS24_315:
+			_compile = scs.Compile[fr_bls24315.Element]
+		case ecc.BW6_633:
+			_compile = scs.Compile[fr_bw6633.Element]
+		case ecc.BW6_761:
+			_compile = scs.Compile[fr_bw6761.Element]
+		default:
+			panic("not implemented")
+		}
+	} else if backendID == backend.GROTH16 {
+		switch curveID {
+		case ecc.BN254:
+			_compile = r1cs.Compile[fr_bn254.Element]
+		case ecc.BLS12_377:
+			_compile = r1cs.Compile[fr_bls12377.Element]
+		case ecc.BLS12_381:
+			_compile = r1cs.Compile[fr_bls12381.Element]
+		case ecc.BLS24_315:
+			_compile = r1cs.Compile[fr_bls24315.Element]
+		case ecc.BW6_633:
+			_compile = r1cs.Compile[fr_bw6633.Element]
+		case ecc.BW6_761:
+			_compile = r1cs.Compile[fr_bw6761.Element]
+		default:
+			panic("not implemented")
+		}
+	} else {
+		panic("not implemented")
+	}
+
+	return _compile(circuit, compileOpts...)
+}
+
 // compile the given circuit for given curve and backend, if not already present in cache
 func (assert *Assert) compile(circuit frontend.Circuit, curveID ecc.ID, backendID backend.ID, compileOpts []frontend.CompileOption) (frontend.CompiledConstraintSystem, error) {
 	addr, err := assert.getCircuitAddr(circuit)
@@ -425,54 +468,11 @@ func (assert *Assert) compile(circuit frontend.Circuit, curveID ecc.ID, backendI
 		return ccs, nil
 	}
 
-	var newBuilder frontend.NewBuilder
-
-	switch backendID {
-	case backend.GROTH16:
-		newBuilder = r1cs.NewBuilder
-	case backend.PLONK:
-		newBuilder = scs.NewBuilder
-	default:
-		panic("not implemented")
+	ccs, err := compile(curveID, backendID, circuit, compileOpts)
+	if err != nil {
+		return nil, err
 	}
-
-	// else compile it and ensure it is deterministic
-
-	// TODO @gbotrel cleanup
-	var _ccs, ccs frontend.CompiledConstraintSystem
-	switch curveID {
-	case ecc.BN254:
-		ccs, err = frontend.Compile[fr_bn254.Element](newBuilder, circuit, compileOpts...)
-	case ecc.BLS12_377:
-		ccs, err = frontend.Compile[fr_bls12377.Element](newBuilder, circuit, compileOpts...)
-	case ecc.BLS12_381:
-		ccs, err = frontend.Compile[fr_bls12381.Element](newBuilder, circuit, compileOpts...)
-	case ecc.BLS24_315:
-		ccs, err = frontend.Compile[fr_bls24315.Element](newBuilder, circuit, compileOpts...)
-	case ecc.BW6_633:
-		ccs, err = frontend.Compile[fr_bw6633.Element](newBuilder, circuit, compileOpts...)
-	case ecc.BW6_761:
-		ccs, err = frontend.Compile[fr_bw6761.Element](newBuilder, circuit, compileOpts...)
-	default:
-		panic("not implemented")
-	}
-
-	switch curveID {
-	case ecc.BN254:
-		_ccs, err = frontend.Compile[fr_bn254.Element](newBuilder, circuit, compileOpts...)
-	case ecc.BLS12_377:
-		_ccs, err = frontend.Compile[fr_bls12377.Element](newBuilder, circuit, compileOpts...)
-	case ecc.BLS12_381:
-		_ccs, err = frontend.Compile[fr_bls12381.Element](newBuilder, circuit, compileOpts...)
-	case ecc.BLS24_315:
-		_ccs, err = frontend.Compile[fr_bls24315.Element](newBuilder, circuit, compileOpts...)
-	case ecc.BW6_633:
-		_ccs, err = frontend.Compile[fr_bw6633.Element](newBuilder, circuit, compileOpts...)
-	case ecc.BW6_761:
-		_ccs, err = frontend.Compile[fr_bw6761.Element](newBuilder, circuit, compileOpts...)
-	default:
-		panic("not implemented")
-	}
+	_ccs, err := compile(curveID, backendID, circuit, compileOpts)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrCompilationNotDeterministic, err)
 	}

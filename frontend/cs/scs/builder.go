@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	"github.com/consensys/gnark-crypto/ecc"
+	"github.com/consensys/gnark-crypto/field"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/backend/hint"
 	"github.com/consensys/gnark/frontend"
@@ -44,9 +45,35 @@ import (
 	"github.com/consensys/gnark/logger"
 )
 
-func NewBuilder(curve ecc.ID, config frontend.CompileConfig) (frontend.Builder, error) {
-	return newBuilder(curve, config), nil
+func Compile[E any, ptE field.Element[E]](circuit frontend.Circuit, opts ...frontend.CompileOption) (frontend.CompiledConstraintSystem, error) {
+	log := logger.Logger()
+	log.Info().Msg("compiling circuit")
+	// parse options
+	opt := frontend.CompileConfig{}
+	for _, o := range opts {
+		if err := o(&opt); err != nil {
+			log.Err(err).Msg("applying compile option")
+			return nil, fmt.Errorf("apply option: %w", err)
+		}
+	}
+
+	builder := newBuilder[E, ptE](opt)
+
+	// parse the circuit builds a schema of the circuit
+	// and call circuit.Define() method to initialize a list of constraints in the compiler
+	if err := frontend.ParseCircuit[E, ptE](builder, circuit); err != nil {
+		log.Err(err).Msg("parsing circuit")
+		return nil, fmt.Errorf("parse circuit: %w", err)
+
+	}
+
+	// compile the circuit into its final form
+	return builder.Compile()
 }
+
+// func NewBuilder[E any, ptE field.Element[E]](config frontend.CompileConfig) (frontend.Builder[E, ptE], error) {
+// 	return newBuilder[E, ptE](config), nil
+// }
 
 type scs struct {
 	compiled.ConstraintSystem
@@ -61,7 +88,7 @@ type scs struct {
 
 // initialCapacity has quite some impact on frontend performance, especially on large circuits size
 // we may want to add build tags to tune that
-func newBuilder(curveID ecc.ID, config frontend.CompileConfig) *scs {
+func newBuilder[E any, ptE field.Element[E]](config frontend.CompileConfig) *scs {
 	system := scs{
 		ConstraintSystem: compiled.ConstraintSystem{
 			MDebug:             make(map[int]int),
@@ -77,7 +104,9 @@ func newBuilder(curveID ecc.ID, config frontend.CompileConfig) *scs {
 	system.Public = make([]string, 0)
 	system.Secret = make([]string, 0)
 
-	system.CurveID = curveID
+	// TODO @gbotrel remove hack
+	var F frontend.Field[E, ptE]
+	system.CurveID = F.Curve()
 
 	return &system
 }

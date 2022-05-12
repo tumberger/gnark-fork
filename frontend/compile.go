@@ -32,39 +32,8 @@ import (
 //
 // initialCapacity is an optional parameter that reserves memory in slices
 // it should be set to the estimated number of constraints in the circuit, if known.
-func Compile[E any, ptE field.Element[E]](newBuilder NewBuilder, circuit Circuit, opts ...CompileOption) (CompiledConstraintSystem, error) {
-	log := logger.Logger()
-	log.Info().Msg("compiling circuit")
-	// parse options
-	opt := CompileConfig{}
-	for _, o := range opts {
-		if err := o(&opt); err != nil {
-			log.Err(err).Msg("applying compile option")
-			return nil, fmt.Errorf("apply option: %w", err)
-		}
-	}
 
-	// instantiate new builder
-	var f Field[E, ptE]
-	builder, err := newBuilder(f.Curve(), opt)
-	if err != nil {
-		log.Err(err).Msg("instantiating builder")
-		return nil, fmt.Errorf("new compiler: %w", err)
-	}
-
-	// parse the circuit builds a schema of the circuit
-	// and call circuit.Define() method to initialize a list of constraints in the compiler
-	if err = parseCircuit(builder, circuit); err != nil {
-		log.Err(err).Msg("parsing circuit")
-		return nil, fmt.Errorf("parse circuit: %w", err)
-
-	}
-
-	// compile the circuit into its final form
-	return builder.Compile()
-}
-
-func parseCircuit(builder Builder, circuit Circuit) (err error) {
+func ParseCircuit[E any, ptE field.Element[E]](builder Builder[E, ptE], circuit Circuit) (err error) {
 	// ensure circuit.Define has pointer receiver
 	if reflect.ValueOf(circuit).Kind() != reflect.Ptr {
 		return errors.New("frontend.Circuit methods must be defined on pointer receiver")

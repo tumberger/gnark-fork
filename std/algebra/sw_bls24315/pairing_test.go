@@ -185,12 +185,12 @@ func mustbeEq(api frontend.API, fp24 fields_bls24315.E24, e24 *bls24315.GT) {
 // bench
 func BenchmarkPairing(b *testing.B) {
 	var c pairingBLS24315
-	ccsBench, _ = frontend.Compile[fr_bw6633.Element](r1cs.NewBuilder, &c)
+	ccsBench, _ = r1cs.Compile[fr_bw6633.Element](&c)
 	b.Log("groth16", ccsBench.GetNbConstraints())
 }
 
 func BenchmarkTriplePairing(b *testing.B) {
 	var c triplePairingBLS24315
-	ccsBench, _ = frontend.Compile[fr_bw6633.Element](r1cs.NewBuilder, &c)
+	ccsBench, _ = r1cs.Compile[fr_bw6633.Element](&c)
 	b.Log("groth16", ccsBench.GetNbConstraints())
 }

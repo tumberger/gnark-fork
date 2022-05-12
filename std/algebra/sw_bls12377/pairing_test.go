@@ -174,7 +174,7 @@ func BenchmarkPairing(b *testing.B) {
 	var c pairingBLS377
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ccsBench, _ = frontend.Compile[fr_bw6761.Element](r1cs.NewBuilder, &c)
+		ccsBench, _ = r1cs.Compile[fr_bw6761.Element](&c)
 	}
 	b.Log("groth16", ccsBench.GetNbConstraints())
 }
@@ -183,7 +183,7 @@ func BenchmarkTriplePairing(b *testing.B) {
 	var c triplePairingBLS377
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ccsBench, _ = frontend.Compile[fr_bw6761.Element](r1cs.NewBuilder, &c)
+		ccsBench, _ = r1cs.Compile[fr_bw6761.Element](&c)
 	}
 	b.Log("groth16", ccsBench.GetNbConstraints())
 }

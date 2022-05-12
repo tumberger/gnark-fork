@@ -74,7 +74,7 @@ func main() {
 	var circuit Circuit
 
 	// // building the circuit...
-	ccs, err := frontend.Compile[fr.Element](scs.NewBuilder, &circuit)
+	ccs, err := scs.Compile[fr.Element](&circuit)
 	if err != nil {
 		fmt.Println("circuit compilation error")
 	}

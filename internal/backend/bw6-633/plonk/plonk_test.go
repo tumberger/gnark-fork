@@ -60,7 +60,7 @@ func referenceCircuit() (frontend.CompiledConstraintSystem, frontend.Circuit, *k
 	circuit := refCircuit{
 		nbConstraints: nbConstraints,
 	}
-	ccs, err := frontend.Compile[fr.Element](scs.NewBuilder, &circuit)
+	ccs, err := scs.Compile[fr.Element](&circuit)
 	if err != nil {
 		panic(err)
 	}
