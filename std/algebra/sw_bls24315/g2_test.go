@@ -22,6 +22,7 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark-crypto/ecc/bls24-315/fr"
+	fr_bw6633 "github.com/consensys/gnark-crypto/ecc/bw6-633/fr"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/frontend/cs/scs"
@@ -389,7 +390,7 @@ func BenchmarkDoubleAffineG2(b *testing.B) {
 	var c g2DoubleAffine
 	b.Run("groth16", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			ccsBench, _ = frontend.Compile(ecc.BW6_633, r1cs.NewBuilder, &c)
+			ccsBench, _ = frontend.Compile[fr_bw6633.Element](r1cs.NewBuilder, &c)
 		}
 
 	})
@@ -400,7 +401,7 @@ func BenchmarkAddAssignAffineG2(b *testing.B) {
 	var c g2AddAssignAffine
 	b.Run("groth16", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			ccsBench, _ = frontend.Compile(ecc.BW6_633, r1cs.NewBuilder, &c)
+			ccsBench, _ = frontend.Compile[fr_bw6633.Element](r1cs.NewBuilder, &c)
 		}
 
 	})
@@ -411,7 +412,7 @@ func BenchmarkDoubleAndAddAffineG2(b *testing.B) {
 	var c g2DoubleAndAddAffine
 	b.Run("groth16", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			ccsBench, _ = frontend.Compile(ecc.BW6_633, r1cs.NewBuilder, &c)
+			ccsBench, _ = frontend.Compile[fr_bw6633.Element](r1cs.NewBuilder, &c)
 		}
 
 	})
@@ -428,7 +429,7 @@ func BenchmarkConstScalarMulG2(b *testing.B) {
 	c.R = r
 	b.Run("groth16", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			ccsBench, _ = frontend.Compile(ecc.BW6_633, r1cs.NewBuilder, &c)
+			ccsBench, _ = frontend.Compile[fr_bw6633.Element](r1cs.NewBuilder, &c)
 		}
 
 	})
@@ -436,7 +437,7 @@ func BenchmarkConstScalarMulG2(b *testing.B) {
 	b.Run("plonk", func(b *testing.B) {
 		var err error
 		for i := 0; i < b.N; i++ {
-			ccsBench, err = frontend.Compile(ecc.BW6_633, scs.NewBuilder, &c)
+			ccsBench, err = frontend.Compile[fr_bw6633.Element](scs.NewBuilder, &c)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -457,7 +458,7 @@ func BenchmarkVarScalarMulG2(b *testing.B) {
 	c.R = r
 	b.Run("groth16", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			ccsBench, _ = frontend.Compile(ecc.BW6_633, r1cs.NewBuilder, &c)
+			ccsBench, _ = frontend.Compile[fr_bw6633.Element](r1cs.NewBuilder, &c)
 		}
 
 	})
@@ -465,7 +466,7 @@ func BenchmarkVarScalarMulG2(b *testing.B) {
 	b.Run("plonk", func(b *testing.B) {
 		var err error
 		for i := 0; i < b.N; i++ {
-			ccsBench, err = frontend.Compile(ecc.BW6_633, scs.NewBuilder, &c)
+			ccsBench, err = frontend.Compile[fr_bw6633.Element](scs.NewBuilder, &c)
 			if err != nil {
 				b.Fatal(err)
 			}

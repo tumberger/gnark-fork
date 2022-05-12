@@ -12,6 +12,13 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/frontend/cs/scs"
+
+	fr_bls12377 "github.com/consensys/gnark-crypto/ecc/bls12-377/fr"
+	fr_bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
+	fr_bls24315 "github.com/consensys/gnark-crypto/ecc/bls24-315/fr"
+	fr_bn254 "github.com/consensys/gnark-crypto/ecc/bn254/fr"
+	fr_bw6633 "github.com/consensys/gnark-crypto/ecc/bw6-633/fr"
+	fr_bw6761 "github.com/consensys/gnark-crypto/ecc/bw6-761/fr"
 )
 
 const nbCurves = 6
@@ -83,7 +90,26 @@ func NewSnippetStats(curve ecc.ID, backendID backend.ID, circuit frontend.Circui
 		panic("not implemented")
 	}
 
-	ccs, err := frontend.Compile(curve, newCompiler, circuit, frontend.IgnoreUnconstrainedInputs())
+	// TODO @gbotrel cleanu up
+	var ccs frontend.CompiledConstraintSystem
+	var err error
+	switch curve {
+	case ecc.BN254:
+		ccs, err = frontend.Compile[fr_bn254.Element](newCompiler, circuit, frontend.IgnoreUnconstrainedInputs())
+	case ecc.BLS12_377:
+		ccs, err = frontend.Compile[fr_bls12377.Element](newCompiler, circuit, frontend.IgnoreUnconstrainedInputs())
+	case ecc.BLS12_381:
+		ccs, err = frontend.Compile[fr_bls12381.Element](newCompiler, circuit, frontend.IgnoreUnconstrainedInputs())
+	case ecc.BLS24_315:
+		ccs, err = frontend.Compile[fr_bls24315.Element](newCompiler, circuit, frontend.IgnoreUnconstrainedInputs())
+	case ecc.BW6_633:
+		ccs, err = frontend.Compile[fr_bw6633.Element](newCompiler, circuit, frontend.IgnoreUnconstrainedInputs())
+	case ecc.BW6_761:
+		ccs, err = frontend.Compile[fr_bw6761.Element](newCompiler, circuit, frontend.IgnoreUnconstrainedInputs())
+	default:
+		panic("not implemented")
+	}
+
 	if err != nil {
 		return snippetStats{}, err
 	}

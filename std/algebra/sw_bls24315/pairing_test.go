@@ -23,6 +23,7 @@ import (
 	"github.com/consensys/gnark-crypto/ecc"
 	bls24315 "github.com/consensys/gnark-crypto/ecc/bls24-315"
 	"github.com/consensys/gnark-crypto/ecc/bls24-315/fr"
+	fr_bw6633 "github.com/consensys/gnark-crypto/ecc/bw6-633/fr"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
@@ -184,12 +185,12 @@ func mustbeEq(api frontend.API, fp24 fields_bls24315.E24, e24 *bls24315.GT) {
 // bench
 func BenchmarkPairing(b *testing.B) {
 	var c pairingBLS24315
-	ccsBench, _ = frontend.Compile(ecc.BW6_633, r1cs.NewBuilder, &c)
+	ccsBench, _ = frontend.Compile[fr_bw6633.Element](r1cs.NewBuilder, &c)
 	b.Log("groth16", ccsBench.GetNbConstraints())
 }
 
 func BenchmarkTriplePairing(b *testing.B) {
 	var c triplePairingBLS24315
-	ccsBench, _ = frontend.Compile(ecc.BW6_633, r1cs.NewBuilder, &c)
+	ccsBench, _ = frontend.Compile[fr_bw6633.Element](r1cs.NewBuilder, &c)
 	b.Log("groth16", ccsBench.GetNbConstraints())
 }

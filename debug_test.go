@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc"
+	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/backend/plonk"
@@ -46,11 +47,11 @@ func TestPrintln(t *testing.T) {
 	witness.B = 11
 
 	var expected bytes.Buffer
-	expected.WriteString("debug_test.go:28 > 13 is the addition\n")
-	expected.WriteString("debug_test.go:30 > 26 42\n")
-	expected.WriteString("debug_test.go:32 > bits 1\n")
-	expected.WriteString("debug_test.go:33 > circuit {A: 2, B: 11}\n")
-	expected.WriteString("debug_test.go:37 > m .*\n")
+	expected.WriteString("debug_test.go:29 > 13 is the addition\n")
+	expected.WriteString("debug_test.go:31 > 26 42\n")
+	expected.WriteString("debug_test.go:33 > bits 1\n")
+	expected.WriteString("debug_test.go:34 > circuit {A: 2, B: 11}\n")
+	expected.WriteString("debug_test.go:38 > m .*\n")
 
 	{
 		trace, _ := getGroth16Trace(&circuit, &witness)
@@ -175,7 +176,7 @@ func TestTraceNotBoolean(t *testing.T) {
 }
 
 func getPlonkTrace(circuit, w frontend.Circuit) (string, error) {
-	ccs, err := frontend.Compile(ecc.BN254, scs.NewBuilder, circuit)
+	ccs, err := frontend.Compile[fr.Element](scs.NewBuilder, circuit)
 	if err != nil {
 		return "", err
 	}
@@ -200,7 +201,7 @@ func getPlonkTrace(circuit, w frontend.Circuit) (string, error) {
 }
 
 func getGroth16Trace(circuit, w frontend.Circuit) (string, error) {
-	ccs, err := frontend.Compile(ecc.BN254, r1cs.NewBuilder, circuit)
+	ccs, err := frontend.Compile[fr.Element](r1cs.NewBuilder, circuit)
 	if err != nil {
 		return "", err
 	}

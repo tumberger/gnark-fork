@@ -3,9 +3,12 @@ package frontend
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"reflect"
 
+	"github.com/consensys/gnark"
 	"github.com/consensys/gnark-crypto/ecc"
+	"github.com/consensys/gnark-crypto/field"
 	"github.com/consensys/gnark/debug"
 	"github.com/consensys/gnark/frontend/schema"
 	"github.com/consensys/gnark/logger"
@@ -29,9 +32,9 @@ import (
 //
 // initialCapacity is an optional parameter that reserves memory in slices
 // it should be set to the estimated number of constraints in the circuit, if known.
-func Compile(curveID ecc.ID, newBuilder NewBuilder, circuit Circuit, opts ...CompileOption) (CompiledConstraintSystem, error) {
+func Compile[E any, ptE field.Element[E]](newBuilder NewBuilder, circuit Circuit, opts ...CompileOption) (CompiledConstraintSystem, error) {
 	log := logger.Logger()
-	log.Info().Str("curve", curveID.String()).Msg("compiling circuit")
+	log.Info().Msg("compiling circuit")
 	// parse options
 	opt := CompileConfig{}
 	for _, o := range opts {
@@ -42,7 +45,8 @@ func Compile(curveID ecc.ID, newBuilder NewBuilder, circuit Circuit, opts ...Com
 	}
 
 	// instantiate new builder
-	builder, err := newBuilder(curveID, opt)
+	var f Field[E, ptE]
+	builder, err := newBuilder(f.Curve(), opt)
 	if err != nil {
 		log.Err(err).Msg("instantiating builder")
 		return nil, fmt.Errorf("new compiler: %w", err)
@@ -155,4 +159,38 @@ var tVariable reflect.Type
 
 func init() {
 	tVariable = reflect.ValueOf(struct{ A Variable }{}).FieldByName("A").Type()
+}
+
+// TODO @gbotrel find a home for this
+type Field[E any, _ field.Element[E]] struct {
+}
+
+func (f *Field[E, ptE]) Bits() int {
+	var one, qMinusOne E
+	ptE(&one).SetOne()
+	ptE(&qMinusOne).Sub(&qMinusOne, &one)
+	ptE(&qMinusOne).FromMont()
+	return ptE(&qMinusOne).BitLen()
+}
+
+func (f *Field[E, ptE]) Modulus() *big.Int {
+	var one, qMinusOne E
+	q := new(big.Int)
+	ptE(&one).SetOne()
+	ptE(&qMinusOne).Sub(&qMinusOne, &one)
+	ptE(&qMinusOne).ToBigIntRegular(q)
+	q.SetBit(q, 0, 1) // q - 1 is even
+	return q
+}
+func (f *Field[E, ptE]) Curve() ecc.ID {
+	// temporary hack for smoother refactoring
+	q := f.Modulus()
+
+	for _, c := range gnark.Curves() {
+		if c.Info().Fr.Modulus().Cmp(q) == 0 {
+			return c
+		}
+	}
+
+	panic("not implemented")
 }

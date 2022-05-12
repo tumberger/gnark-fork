@@ -34,6 +34,13 @@ import (
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/frontend/cs/scs"
 	"github.com/stretchr/testify/require"
+
+	fr_bls12377 "github.com/consensys/gnark-crypto/ecc/bls12-377/fr"
+	fr_bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
+	fr_bls24315 "github.com/consensys/gnark-crypto/ecc/bls24-315/fr"
+	fr_bn254 "github.com/consensys/gnark-crypto/ecc/bn254/fr"
+	fr_bw6633 "github.com/consensys/gnark-crypto/ecc/bw6-633/fr"
+	fr_bw6761 "github.com/consensys/gnark-crypto/ecc/bw6-761/fr"
 )
 
 var (
@@ -430,12 +437,42 @@ func (assert *Assert) compile(circuit frontend.Circuit, curveID ecc.ID, backendI
 	}
 
 	// else compile it and ensure it is deterministic
-	ccs, err := frontend.Compile(curveID, newBuilder, circuit, compileOpts...)
-	if err != nil {
-		return nil, err
+
+	// TODO @gbotrel cleanup
+	var _ccs, ccs frontend.CompiledConstraintSystem
+	switch curveID {
+	case ecc.BN254:
+		ccs, err = frontend.Compile[fr_bn254.Element](newBuilder, circuit, compileOpts...)
+	case ecc.BLS12_377:
+		ccs, err = frontend.Compile[fr_bls12377.Element](newBuilder, circuit, compileOpts...)
+	case ecc.BLS12_381:
+		ccs, err = frontend.Compile[fr_bls12381.Element](newBuilder, circuit, compileOpts...)
+	case ecc.BLS24_315:
+		ccs, err = frontend.Compile[fr_bls24315.Element](newBuilder, circuit, compileOpts...)
+	case ecc.BW6_633:
+		ccs, err = frontend.Compile[fr_bw6633.Element](newBuilder, circuit, compileOpts...)
+	case ecc.BW6_761:
+		ccs, err = frontend.Compile[fr_bw6761.Element](newBuilder, circuit, compileOpts...)
+	default:
+		panic("not implemented")
 	}
 
-	_ccs, err := frontend.Compile(curveID, newBuilder, circuit, compileOpts...)
+	switch curveID {
+	case ecc.BN254:
+		_ccs, err = frontend.Compile[fr_bn254.Element](newBuilder, circuit, compileOpts...)
+	case ecc.BLS12_377:
+		_ccs, err = frontend.Compile[fr_bls12377.Element](newBuilder, circuit, compileOpts...)
+	case ecc.BLS12_381:
+		_ccs, err = frontend.Compile[fr_bls12381.Element](newBuilder, circuit, compileOpts...)
+	case ecc.BLS24_315:
+		_ccs, err = frontend.Compile[fr_bls24315.Element](newBuilder, circuit, compileOpts...)
+	case ecc.BW6_633:
+		_ccs, err = frontend.Compile[fr_bw6633.Element](newBuilder, circuit, compileOpts...)
+	case ecc.BW6_761:
+		_ccs, err = frontend.Compile[fr_bw6761.Element](newBuilder, circuit, compileOpts...)
+	default:
+		panic("not implemented")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrCompilationNotDeterministic, err)
 	}

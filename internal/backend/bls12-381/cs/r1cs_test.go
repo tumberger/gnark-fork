@@ -26,6 +26,8 @@ import (
 	"testing"
 
 	"github.com/consensys/gnark/internal/backend/bls12-381/cs"
+
+	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 )
 
 func TestSerialization(t *testing.T) {
@@ -36,7 +38,7 @@ func TestSerialization(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			tc := circuits.Circuits[name]
 
-			r1cs1, err := frontend.Compile(ecc.BLS12_381, r1cs.NewBuilder, tc.Circuit)
+			r1cs1, err := frontend.Compile[fr.Element](r1cs.NewBuilder, tc.Circuit)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -45,7 +47,7 @@ func TestSerialization(t *testing.T) {
 			}
 
 			// copmpile a second time to ensure determinism
-			r1cs2, err := frontend.Compile(ecc.BLS12_381, r1cs.NewBuilder, tc.Circuit)
+			r1cs2, err := frontend.Compile[fr.Element](r1cs.NewBuilder, tc.Circuit)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -134,7 +136,7 @@ func (circuit *circuit) Define(api frontend.API) error {
 func BenchmarkSolve(b *testing.B) {
 
 	var c circuit
-	ccs, err := frontend.Compile(ecc.BLS12_381, r1cs.NewBuilder, &c)
+	ccs, err := frontend.Compile[fr.Element](r1cs.NewBuilder, &c)
 	if err != nil {
 		b.Fatal(err)
 	}

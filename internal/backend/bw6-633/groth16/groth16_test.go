@@ -19,8 +19,6 @@ package groth16_test
 import (
 	"github.com/consensys/gnark-crypto/ecc/bw6-633/fr"
 
-	curve "github.com/consensys/gnark-crypto/ecc/bw6-633"
-
 	"github.com/consensys/gnark/internal/backend/bw6-633/cs"
 
 	bw6_633witness "github.com/consensys/gnark/internal/backend/bw6-633/witness"
@@ -58,7 +56,7 @@ func referenceCircuit() (frontend.CompiledConstraintSystem, frontend.Circuit) {
 	circuit := refCircuit{
 		nbConstraints: nbConstraints,
 	}
-	r1cs, err := frontend.Compile(curve.ID, r1cs.NewBuilder, &circuit)
+	r1cs, err := frontend.Compile[fr.Element](r1cs.NewBuilder, &circuit)
 	if err != nil {
 		panic(err)
 	}

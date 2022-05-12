@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc"
+	"github.com/consensys/gnark-crypto/ecc/bls24-315/fr"
+	fr_bw6633 "github.com/consensys/gnark-crypto/ecc/bw6-633/fr"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
@@ -61,7 +63,7 @@ func generateBls24315InnerProof(t *testing.T, vk *groth16_bls24315.VerifyingKey,
 
 	// create a mock cs: knowing the preimage of a hash using mimc
 	var circuit, assignment mimcCircuit
-	r1cs, err := frontend.Compile(ecc.BLS24_315, r1cs.NewBuilder, &circuit)
+	r1cs, err := frontend.Compile[fr.Element](r1cs.NewBuilder, &circuit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +161,7 @@ func BenchmarkCompile(b *testing.B) {
 	var ccs frontend.CompiledConstraintSystem
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ccs, _ = frontend.Compile(ecc.BW6_633, r1cs.NewBuilder, &circuit)
+		ccs, _ = frontend.Compile[fr_bw6633.Element](r1cs.NewBuilder, &circuit)
 	}
 	b.Log(ccs.GetNbConstraints())
 }

@@ -23,6 +23,7 @@ import (
 	"github.com/consensys/gnark-crypto/ecc"
 	bls12377 "github.com/consensys/gnark-crypto/ecc/bls12-377"
 	"github.com/consensys/gnark-crypto/ecc/bls12-377/fr"
+	fr_bw6761 "github.com/consensys/gnark-crypto/ecc/bw6-761/fr"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
@@ -173,7 +174,7 @@ func BenchmarkPairing(b *testing.B) {
 	var c pairingBLS377
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ccsBench, _ = frontend.Compile(ecc.BW6_761, r1cs.NewBuilder, &c)
+		ccsBench, _ = frontend.Compile[fr_bw6761.Element](r1cs.NewBuilder, &c)
 	}
 	b.Log("groth16", ccsBench.GetNbConstraints())
 }
@@ -182,7 +183,7 @@ func BenchmarkTriplePairing(b *testing.B) {
 	var c triplePairingBLS377
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ccsBench, _ = frontend.Compile(ecc.BW6_761, r1cs.NewBuilder, &c)
+		ccsBench, _ = frontend.Compile[fr_bw6761.Element](r1cs.NewBuilder, &c)
 	}
 	b.Log("groth16", ccsBench.GetNbConstraints())
 }

@@ -19,8 +19,6 @@ package plonk_test
 import (
 	"github.com/consensys/gnark-crypto/ecc/bls24-315/fr"
 
-	curve "github.com/consensys/gnark-crypto/ecc/bls24-315"
-
 	"github.com/consensys/gnark/internal/backend/bls24-315/cs"
 
 	bls24_315witness "github.com/consensys/gnark/internal/backend/bls24-315/witness"
@@ -62,7 +60,7 @@ func referenceCircuit() (frontend.CompiledConstraintSystem, frontend.Circuit, *k
 	circuit := refCircuit{
 		nbConstraints: nbConstraints,
 	}
-	ccs, err := frontend.Compile(curve.ID, scs.NewBuilder, &circuit)
+	ccs, err := frontend.Compile[fr.Element](scs.NewBuilder, &circuit)
 	if err != nil {
 		panic(err)
 	}

@@ -1,6 +1,5 @@
 import (
 	{{ template "import_fr" . }}
-	{{ template "import_curve" . }}
 	{{ template "import_backend_cs" . }}
 	{{ template "import_witness" . }}
 	{{ template "import_plonk" . }}
@@ -43,7 +42,7 @@ func referenceCircuit() (frontend.CompiledConstraintSystem, frontend.Circuit, *k
 	circuit := refCircuit{
 		nbConstraints: nbConstraints,
 	}
-	ccs, err := frontend.Compile(curve.ID, scs.NewBuilder, &circuit)
+	ccs, err := frontend.Compile[fr.Element](scs.NewBuilder, &circuit)
 	if err != nil {
 		panic(err)
 	}

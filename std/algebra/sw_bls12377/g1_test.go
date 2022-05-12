@@ -28,6 +28,7 @@ import (
 	"github.com/consensys/gnark/test"
 
 	bls12377 "github.com/consensys/gnark-crypto/ecc/bls12-377"
+	fr_bw6761 "github.com/consensys/gnark-crypto/ecc/bw6-761/fr"
 )
 
 // -------------------------------------------------------------------------------------------------
@@ -392,7 +393,7 @@ func BenchmarkConstScalarMulG1(b *testing.B) {
 	c.R = r
 	b.Run("groth16", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			ccsBench, _ = frontend.Compile(ecc.BW6_761, r1cs.NewBuilder, &c)
+			ccsBench, _ = frontend.Compile[fr_bw6761.Element](r1cs.NewBuilder, &c)
 		}
 
 	})
@@ -400,7 +401,7 @@ func BenchmarkConstScalarMulG1(b *testing.B) {
 	b.Run("plonk", func(b *testing.B) {
 		var err error
 		for i := 0; i < b.N; i++ {
-			ccsBench, err = frontend.Compile(ecc.BW6_761, scs.NewBuilder, &c)
+			ccsBench, err = frontend.Compile[fr_bw6761.Element](scs.NewBuilder, &c)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -421,7 +422,7 @@ func BenchmarkVarScalarMulG1(b *testing.B) {
 	c.R = r
 	b.Run("groth16", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			ccsBench, _ = frontend.Compile(ecc.BW6_761, r1cs.NewBuilder, &c)
+			ccsBench, _ = frontend.Compile[fr_bw6761.Element](r1cs.NewBuilder, &c)
 		}
 
 	})
@@ -429,7 +430,7 @@ func BenchmarkVarScalarMulG1(b *testing.B) {
 	b.Run("plonk", func(b *testing.B) {
 		var err error
 		for i := 0; i < b.N; i++ {
-			ccsBench, err = frontend.Compile(ecc.BW6_761, scs.NewBuilder, &c)
+			ccsBench, err = frontend.Compile[fr_bw6761.Element](scs.NewBuilder, &c)
 			if err != nil {
 				b.Fatal(err)
 			}

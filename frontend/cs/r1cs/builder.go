@@ -346,7 +346,6 @@ func init() {
 func (cs *r1cs) Compile() (frontend.CompiledConstraintSystem, error) {
 	log := logger.Logger()
 	log.Info().
-		Str("curve", cs.CurveID.String()).
 		Int("nbConstraints", len(cs.Constraints)).
 		Msg("building constraint system")
 
