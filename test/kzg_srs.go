@@ -18,6 +18,7 @@ package test
 
 import (
 	"crypto/rand"
+	"math/big"
 	"sync"
 
 	"github.com/consensys/gnark-crypto/ecc"
@@ -49,51 +50,51 @@ func NewKZGSRS(ccs frontend.CompiledConstraintSystem) (kzg.SRS, error) {
 		return getCachedSRS(ccs)
 	}
 
-	return newKZGSRS(ccs.CurveID(), kzgSize)
+	return newKZGSRS(ccs.Modulus(), kzgSize)
 
 }
 
-var srsCache map[ecc.ID]kzg.SRS
+var srsCache map[string]kzg.SRS
 var lock sync.Mutex
 
 func init() {
-	srsCache = make(map[ecc.ID]kzg.SRS)
+	srsCache = make(map[string]kzg.SRS)
 }
 func getCachedSRS(ccs frontend.CompiledConstraintSystem) (kzg.SRS, error) {
 	lock.Lock()
 	defer lock.Unlock()
 
-	if srs, ok := srsCache[ccs.CurveID()]; ok {
+	if srs, ok := srsCache[ccs.Modulus().Text(16)]; ok {
 		return srs, nil
 	}
 
-	srs, err := newKZGSRS(ccs.CurveID(), srsCachedSize)
+	srs, err := newKZGSRS(ccs.Modulus(), srsCachedSize)
 	if err != nil {
 		return nil, err
 	}
-	srsCache[ccs.CurveID()] = srs
+	srsCache[ccs.Modulus().Text(16)] = srs
 	return srs, nil
 }
 
-func newKZGSRS(curve ecc.ID, kzgSize uint64) (kzg.SRS, error) {
+func newKZGSRS(q *big.Int, kzgSize uint64) (kzg.SRS, error) {
 
-	alpha, err := rand.Int(rand.Reader, curve.Info().Fr.Modulus())
+	alpha, err := rand.Int(rand.Reader, q)
 	if err != nil {
 		return nil, err
 	}
 
-	switch curve {
-	case ecc.BN254:
+	switch q.Text(16) {
+	case ecc.BN254.Info().Fr.Modulus().Text(16):
 		return kzg_bn254.NewSRS(kzgSize, alpha)
-	case ecc.BLS12_381:
+	case ecc.BLS12_381.Info().Fr.Modulus().Text(16):
 		return kzg_bls12381.NewSRS(kzgSize, alpha)
-	case ecc.BLS12_377:
+	case ecc.BLS12_377.Info().Fr.Modulus().Text(16):
 		return kzg_bls12377.NewSRS(kzgSize, alpha)
-	case ecc.BW6_761:
+	case ecc.BW6_761.Info().Fr.Modulus().Text(16):
 		return kzg_bw6761.NewSRS(kzgSize, alpha)
-	case ecc.BLS24_315:
+	case ecc.BLS24_315.Info().Fr.Modulus().Text(16):
 		return kzg_bls24315.NewSRS(kzgSize, alpha)
-	case ecc.BW6_633:
+	case ecc.BW6_633.Info().Fr.Modulus().Text(16):
 		return kzg_bw6633.NewSRS(kzgSize, alpha)
 	default:
 		panic("unrecognized R1CS curve type")

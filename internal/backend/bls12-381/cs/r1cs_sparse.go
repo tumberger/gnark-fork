@@ -19,7 +19,6 @@ package cs
 import (
 	"errors"
 	"fmt"
-	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/fxamacker/cbor/v2"
 	"io"
 	"math"
@@ -66,7 +65,7 @@ func NewSparseR1CS(ccs compiled.SparseR1CS, coefficients []big.Int) *SparseR1CS 
 // witness: contains the input variables
 // it returns the full slice of wires
 func (cs *SparseR1CS) Solve(witness []fr.Element, opt backend.ProverConfig) ([]fr.Element, error) {
-	log := logger.Logger().With().Str("curve", cs.CurveID().String()).Int("nbConstraints", len(cs.Constraints)).Str("backend", "plonk").Logger()
+	log := logger.Logger().With().Int("nbConstraints", len(cs.Constraints)).Str("backend", "plonk").Logger()
 
 	// set the slices holding the solution.values and monitoring which variables have been solved
 	nbVariables := cs.NbInternalVariables + cs.NbSecretVariables + cs.NbPublicVariables
@@ -500,11 +499,6 @@ func (cs *SparseR1CS) FrSize() int {
 // GetNbCoefficients return the number of unique coefficients needed in the R1CS
 func (cs *SparseR1CS) GetNbCoefficients() int {
 	return len(cs.Coefficients)
-}
-
-// CurveID returns curve ID as defined in gnark-crypto (ecc.BLS12-381)
-func (cs *SparseR1CS) CurveID() ecc.ID {
-	return ecc.BLS12_381
 }
 
 // WriteTo encodes SparseR1CS into provided io.Writer using cbor

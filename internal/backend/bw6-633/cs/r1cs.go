@@ -34,7 +34,6 @@ import (
 	"github.com/consensys/gnark/internal/backend/ioutils"
 	"github.com/consensys/gnark/logger"
 
-	"github.com/consensys/gnark-crypto/ecc"
 	"math"
 
 	"github.com/consensys/gnark-crypto/ecc/bw6-633/fr"
@@ -67,7 +66,7 @@ func NewR1CS(cs compiled.R1CS, coefficients []big.Int) *R1CS {
 // witness = [publicWires | secretWires] (without the ONE_WIRE !)
 // returns  [publicWires | secretWires | internalWires ]
 func (cs *R1CS) Solve(witness, a, b, c []fr.Element, opt backend.ProverConfig) ([]fr.Element, error) {
-	log := logger.Logger().With().Str("curve", cs.CurveID().String()).Int("nbConstraints", len(cs.Constraints)).Str("backend", "groth16").Logger()
+	log := logger.Logger().With().Int("nbConstraints", len(cs.Constraints)).Str("backend", "groth16").Logger()
 
 	nbWires := cs.NbPublicVariables + cs.NbSecretVariables + cs.NbInternalVariables
 	solution, err := newSolution(nbWires, opt.HintFunctions, cs.MHintsDependencies, cs.MHints, cs.Coefficients)
@@ -450,11 +449,6 @@ func (cs *R1CS) termToString(t compiled.Term, sbb *strings.Builder) {
 // GetNbCoefficients return the number of unique coefficients needed in the R1CS
 func (cs *R1CS) GetNbCoefficients() int {
 	return len(cs.Coefficients)
-}
-
-// CurveID returns curve ID as defined in gnark-crypto
-func (cs *R1CS) CurveID() ecc.ID {
-	return ecc.BW6_633
 }
 
 // FrSize return fr.Limbs * 8, size in byte of a fr element

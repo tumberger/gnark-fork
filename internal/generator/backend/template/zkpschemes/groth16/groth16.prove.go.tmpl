@@ -39,7 +39,7 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, witness {{ toLower .CurveID }}witness.
 		return nil, fmt.Errorf("invalid witness size, got %d, expected %d = %d (public) + %d (secret)", len(witness), int(r1cs.NbPublicVariables-1+r1cs.NbSecretVariables), r1cs.NbPublicVariables, r1cs.NbSecretVariables)
 	}
 
-	log := logger.Logger().With().Str("curve", r1cs.CurveID().String()).Int("nbConstraints", len(r1cs.Constraints)).Str("backend", "groth16").Logger()
+	log := logger.Logger().With().Int("nbConstraints", len(r1cs.Constraints)).Str("backend", "groth16").Logger()
 
 	// solve the R1CS and compute the a, b, c vectors
 	a := make([]fr.Element, len(r1cs.Constraints), pk.Domain.Cardinality)

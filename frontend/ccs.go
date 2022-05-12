@@ -16,8 +16,8 @@ package frontend
 
 import (
 	"io"
+	"math/big"
 
-	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/backend/witness"
 	"github.com/consensys/gnark/frontend/compiled"
@@ -38,8 +38,9 @@ type CompiledConstraintSystem interface {
 	GetNbConstraints() int
 	GetNbCoefficients() int
 
-	CurveID() ecc.ID
 	FrSize() int
+
+	Modulus() *big.Int
 
 	// GetCounters return the collected constraint counters, if any
 	GetCounters() []compiled.Counter

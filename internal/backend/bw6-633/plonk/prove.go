@@ -63,7 +63,7 @@ type Proof struct {
 // Prove from the public data
 func Prove(spr *cs.SparseR1CS, pk *ProvingKey, fullWitness bw6_633witness.Witness, opt backend.ProverConfig) (*Proof, error) {
 
-	log := logger.Logger().With().Str("curve", spr.CurveID().String()).Int("nbConstraints", len(spr.Constraints)).Str("backend", "plonk").Logger()
+	log := logger.Logger().With().Int("nbConstraints", len(spr.Constraints)).Str("backend", "plonk").Logger()
 	start := time.Now()
 	// pick a hash function that will be used to derive the challenges
 	hFunc := sha256.New()
