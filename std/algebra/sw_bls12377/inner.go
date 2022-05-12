@@ -19,7 +19,7 @@ func init() {
 		bls12377thirdRootOne2 := new(big.Int).Mul(bls12377thirdRootOne1, bls12377thirdRootOne1)
 		bls12377glvBasis := new(ecc.Lattice)
 		ecc.PrecomputeLattice(ecc.BLS12_377.Info().Fr.Modulus(), bls12377lambda, bls12377glvBasis)
-		innerCurves[ecc.BW6_761] = &innerConfig{
+		innerCurves[ecc.BW6_761.Info().Fr.Modulus().Text(16)] = &innerConfig{
 			thirdRootOne1: bls12377thirdRootOne1,
 			thirdRootOne2: bls12377thirdRootOne2,
 			glvBasis:      bls12377glvBasis,
@@ -41,7 +41,7 @@ type innerConfig struct {
 	fp            *big.Int
 }
 
-var innerCurves = make(map[ecc.ID]*innerConfig)
+var innerCurves = make(map[string]*innerConfig)
 
 func (cc *innerConfig) phi1(api frontend.API, res, P *G1Affine) *G1Affine {
 	res.X = api.Mul(P.X, cc.thirdRootOne1)
@@ -57,9 +57,9 @@ func (cc *innerConfig) phi2(api frontend.API, res, P *G2Affine) *G2Affine {
 
 // innerCurve returns the configuration of the inner elliptic curve
 // which can be defined on the scalars of outer curve.
-func innerCurve(outerCurve ecc.ID) *innerConfig {
+func innerCurve(outerCurve string) *innerConfig {
 	if cc, ok := innerCurves[outerCurve]; ok {
 		return cc
 	}
-	panic(fmt.Sprintf("outer curve %s does not have a inner curve", outerCurve.String()))
+	panic(fmt.Sprintf("outer curve %s does not have a inner curve", outerCurve))
 }

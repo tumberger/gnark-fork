@@ -3,7 +3,6 @@ package frontend
 import (
 	"math/big"
 
-	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark-crypto/field"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/backend/hint"
@@ -12,6 +11,8 @@ import (
 
 // Compiler represents a constraint system compiler
 type Compiler interface {
+	SnarkField
+
 	// MarkBoolean sets (but do not constraint!) v to be boolean
 	// This is useful in scenarios where a variable is known to be boolean through a constraint
 	// that is not api.AssertIsBoolean. If v is a constant, this is a no-op.
@@ -52,11 +53,13 @@ type Compiler interface {
 	// replacing *big.Int with fr.Element
 	ConstantValue(v Variable) (*big.Int, bool)
 
-	// CurveID returns the ecc.ID injected by the compiler
-	Curve() ecc.ID
-
 	// Backend returns the backend.ID injected by the compiler
 	Backend() backend.ID
+}
+
+type SnarkField interface {
+	Modulus() *big.Int
+	Bits() int
 }
 
 // Builder represents a constraint system builder

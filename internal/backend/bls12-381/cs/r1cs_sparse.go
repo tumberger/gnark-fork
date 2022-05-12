@@ -530,6 +530,7 @@ func (cs *SparseR1CS) ReadFrom(r io.Reader) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	decoder := dm.NewDecoder(r)
 	err = decoder.Decode(cs)
 	return int64(decoder.NumBytesRead()), err

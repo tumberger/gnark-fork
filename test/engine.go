@@ -478,3 +478,11 @@ func copyWitness(to, from frontend.Circuit) {
 func (e *engine) Compiler() frontend.Compiler {
 	return e
 }
+
+func (e *engine) Bits() int {
+	return e.curveID.Info().Fr.Bits
+}
+
+func (e *engine) Modulus() *big.Int {
+	return e.curveID.Info().Fr.Modulus()
+}

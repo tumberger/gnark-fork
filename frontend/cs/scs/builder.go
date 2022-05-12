@@ -89,11 +89,14 @@ type scs struct {
 // initialCapacity has quite some impact on frontend performance, especially on large circuits size
 // we may want to add build tags to tune that
 func newBuilder[E any, ptE field.Element[E]](config frontend.CompileConfig) *scs {
+	var F frontend.Field[E, ptE]
+
 	system := scs{
 		ConstraintSystem: compiled.ConstraintSystem{
 			MDebug:             make(map[int]int),
 			MHints:             make(map[int]*compiled.Hint),
 			MHintsDependencies: make(map[hint.ID]string),
+			SnarkField:         F.Modulus(),
 		},
 		mtBooleans:  make(map[int]struct{}),
 		Constraints: make([]compiled.SparseR1C, 0, config.Capacity),
@@ -103,10 +106,6 @@ func newBuilder[E any, ptE field.Element[E]](config frontend.CompileConfig) *scs
 
 	system.Public = make([]string, 0)
 	system.Secret = make([]string, 0)
-
-	// TODO @gbotrel remove hack
-	var F frontend.Field[E, ptE]
-	system.CurveID = F.Curve()
 
 	return &system
 }
@@ -163,7 +162,7 @@ func (system *scs) reduce(l compiled.LinearExpression) compiled.LinearExpression
 	// ensure our linear expression is sorted, by visibility and by Variable ID
 	sort.Sort(l)
 
-	mod := system.CurveID.Info().Fr.Modulus()
+	mod := system.SnarkField
 	c := new(big.Int)
 	for i := 1; i < len(l); i++ {
 		pcID, pvID, pVis := l[i-1].Unpack()
@@ -326,7 +325,6 @@ func init() {
 func (cs *scs) Compile() (frontend.CompiledConstraintSystem, error) {
 	log := logger.Logger()
 	log.Info().
-		Str("curve", cs.CurveID.String()).
 		Int("nbConstraints", len(cs.Constraints)).
 		Msg("building constraint system")
 
@@ -354,21 +352,21 @@ func (cs *scs) Compile() (frontend.CompiledConstraintSystem, error) {
 	// build levels
 	res.Levels = buildLevels(res)
 
-	switch cs.CurveID {
-	case ecc.BLS12_377:
+	switch cs.SnarkField.Text(16) {
+	case ecc.BLS12_377.Info().Fr.Modulus().Text(16):
 		return bls12377r1cs.NewSparseR1CS(res, cs.st.Coeffs), nil
-	case ecc.BLS12_381:
+	case ecc.BLS12_381.Info().Fr.Modulus().Text(16):
 		return bls12381r1cs.NewSparseR1CS(res, cs.st.Coeffs), nil
-	case ecc.BN254:
+	case ecc.BN254.Info().Fr.Modulus().Text(16):
 		return bn254r1cs.NewSparseR1CS(res, cs.st.Coeffs), nil
-	case ecc.BW6_761:
+	case ecc.BW6_761.Info().Fr.Modulus().Text(16):
 		return bw6761r1cs.NewSparseR1CS(res, cs.st.Coeffs), nil
-	case ecc.BLS24_315:
-		return bls24315r1cs.NewSparseR1CS(res, cs.st.Coeffs), nil
-	case ecc.BW6_633:
+	case ecc.BW6_633.Info().Fr.Modulus().Text(16):
 		return bw6633r1cs.NewSparseR1CS(res, cs.st.Coeffs), nil
+	case ecc.BLS24_315.Info().Fr.Modulus().Text(16):
+		return bls24315r1cs.NewSparseR1CS(res, cs.st.Coeffs), nil
 	default:
-		panic("unknown curveID")
+		panic("not implemtented")
 	}
 
 }
@@ -515,7 +513,6 @@ func (system *scs) AddCounter(from, to frontend.Tag) {
 		To:            to.Name,
 		NbVariables:   to.VID - from.VID,
 		NbConstraints: to.CID - from.CID,
-		CurveID:       system.CurveID,
 		BackendID:     backend.PLONK,
 	})
 }
@@ -605,7 +602,7 @@ func (system *scs) filterConstantProd(in []frontend.Variable) (compiled.LinearEx
 			res = append(res, t)
 		default:
 			n := utils.FromInterface(t)
-			b.Mul(&b, &n).Mod(&b, system.CurveID.Info().Fr.Modulus())
+			b.Mul(&b, &n).Mod(&b, system.SnarkField)
 		}
 	}
 	return res, b

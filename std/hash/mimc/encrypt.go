@@ -28,25 +28,25 @@ import (
 	"github.com/consensys/gnark/frontend"
 )
 
-var encryptFuncs map[ecc.ID]func(MiMC, frontend.Variable) frontend.Variable
-var newMimc map[ecc.ID]func(frontend.API) MiMC
+var encryptFuncs map[string]func(MiMC, frontend.Variable) frontend.Variable
+var newMimc map[string]func(frontend.API) MiMC
 
 func init() {
-	encryptFuncs = make(map[ecc.ID]func(MiMC, frontend.Variable) frontend.Variable)
-	encryptFuncs[ecc.BN254] = encryptPow5
-	encryptFuncs[ecc.BLS12_381] = encryptPow5
-	encryptFuncs[ecc.BLS12_377] = encryptInverse
-	encryptFuncs[ecc.BW6_761] = encryptPow5
-	encryptFuncs[ecc.BW6_633] = encryptPow5
-	encryptFuncs[ecc.BLS24_315] = encryptPow5
+	encryptFuncs = make(map[string]func(MiMC, frontend.Variable) frontend.Variable)
+	encryptFuncs[ecc.BN254.Info().Fr.Modulus().Text(16)] = encryptPow5
+	encryptFuncs[ecc.BLS12_381.Info().Fr.Modulus().Text(16)] = encryptPow5
+	encryptFuncs[ecc.BLS12_377.Info().Fr.Modulus().Text(16)] = encryptInverse
+	encryptFuncs[ecc.BW6_761.Info().Fr.Modulus().Text(16)] = encryptPow5
+	encryptFuncs[ecc.BW6_633.Info().Fr.Modulus().Text(16)] = encryptPow5
+	encryptFuncs[ecc.BLS24_315.Info().Fr.Modulus().Text(16)] = encryptPow5
 
-	newMimc = make(map[ecc.ID]func(frontend.API) MiMC)
-	newMimc[ecc.BN254] = newMimcBN254
-	newMimc[ecc.BLS12_381] = newMimcBLS381
-	newMimc[ecc.BLS12_377] = newMimcBLS377
-	newMimc[ecc.BW6_761] = newMimcBW761
-	newMimc[ecc.BW6_633] = newMimcBW633
-	newMimc[ecc.BLS24_315] = newMimcBLS315
+	newMimc = make(map[string]func(frontend.API) MiMC)
+	newMimc[ecc.BN254.Info().Fr.Modulus().Text(16)] = newMimcBN254
+	newMimc[ecc.BLS12_381.Info().Fr.Modulus().Text(16)] = newMimcBLS381
+	newMimc[ecc.BLS12_377.Info().Fr.Modulus().Text(16)] = newMimcBLS377
+	newMimc[ecc.BW6_761.Info().Fr.Modulus().Text(16)] = newMimcBW761
+	newMimc[ecc.BW6_633.Info().Fr.Modulus().Text(16)] = newMimcBW633
+	newMimc[ecc.BLS24_315.Info().Fr.Modulus().Text(16)] = newMimcBLS315
 }
 
 // -------------------------------------------------------------------------------------------------

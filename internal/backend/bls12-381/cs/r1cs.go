@@ -486,6 +486,7 @@ func (cs *R1CS) ReadFrom(r io.Reader) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	decoder := dm.NewDecoder(r)
 	if err := decoder.Decode(&cs); err != nil {
 		return int64(decoder.NumBytesRead()), err

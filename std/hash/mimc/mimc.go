@@ -36,7 +36,7 @@ type MiMC struct {
 
 // NewMiMC returns a MiMC instance, than can be used in a gnark circuit
 func NewMiMC(api frontend.API) (MiMC, error) {
-	if constructor, ok := newMimc[api.Compiler().Curve()]; ok {
+	if constructor, ok := newMimc[api.Compiler().Modulus().Text(16)]; ok {
 		return constructor(api), nil
 	}
 	return MiMC{}, errors.New("unknown curve id")
@@ -61,7 +61,7 @@ func (h *MiMC) Sum() frontend.Variable {
 
 	//h.Write(data...)s
 	for _, stream := range h.data {
-		r := encryptFuncs[h.id](*h, stream)
+		r := encryptFuncs[h.id.Info().Fr.Modulus().Text(16)](*h, stream)
 		h.h = h.api.Add(h.h, r, stream)
 	}
 

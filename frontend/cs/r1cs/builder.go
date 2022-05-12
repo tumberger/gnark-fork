@@ -90,11 +90,14 @@ type r1cs struct {
 // initialCapacity has quite some impact on frontend performance, especially on large circuits size
 // we may want to add build tags to tune that
 func newBuilder[E any, ptE field.Element[E]](config frontend.CompileConfig) *r1cs {
+	var F frontend.Field[E, ptE]
+
 	system := r1cs{
 		ConstraintSystem: compiled.ConstraintSystem{
 			MDebug:             make(map[int]int),
 			MHints:             make(map[int]*compiled.Hint),
 			MHintsDependencies: make(map[hint.ID]string),
+			SnarkField:         F.Modulus(),
 		},
 		Constraints: make([]compiled.R1C, 0, config.Capacity),
 		st:          cs.NewCoeffTable(),
@@ -107,11 +110,6 @@ func newBuilder[E any, ptE field.Element[E]](config frontend.CompileConfig) *r1c
 
 	// by default the circuit is given a public wire equal to 1
 	system.Public[0] = "one"
-
-	var F frontend.Field[E, ptE]
-
-	// TODO @gbotrel remove hack
-	system.CurveID = F.Curve()
 
 	return &system
 }
@@ -160,7 +158,7 @@ func (system *r1cs) reduce(l compiled.LinearExpression) compiled.LinearExpressio
 		sort.Sort(l)
 	}
 
-	mod := system.CurveID.Info().Fr.Modulus()
+	mod := system.SnarkField
 	c := new(big.Int)
 	for i := 1; i < len(l); i++ {
 		pcID, pvID, pVis := l[i-1].Unpack()
@@ -406,18 +404,18 @@ func (cs *r1cs) Compile() (frontend.CompiledConstraintSystem, error) {
 	// build levels
 	res.Levels = buildLevels(res)
 
-	switch cs.CurveID {
-	case ecc.BLS12_377:
+	switch cs.SnarkField.Text(16) {
+	case ecc.BLS12_377.Info().Fr.Modulus().Text(16):
 		return bls12377r1cs.NewR1CS(res, cs.st.Coeffs), nil
-	case ecc.BLS12_381:
+	case ecc.BLS12_381.Info().Fr.Modulus().Text(16):
 		return bls12381r1cs.NewR1CS(res, cs.st.Coeffs), nil
-	case ecc.BN254:
+	case ecc.BN254.Info().Fr.Modulus().Text(16):
 		return bn254r1cs.NewR1CS(res, cs.st.Coeffs), nil
-	case ecc.BW6_761:
+	case ecc.BW6_761.Info().Fr.Modulus().Text(16):
 		return bw6761r1cs.NewR1CS(res, cs.st.Coeffs), nil
-	case ecc.BW6_633:
+	case ecc.BW6_633.Info().Fr.Modulus().Text(16):
 		return bw6633r1cs.NewR1CS(res, cs.st.Coeffs), nil
-	case ecc.BLS24_315:
+	case ecc.BLS24_315.Info().Fr.Modulus().Text(16):
 		return bls24315r1cs.NewR1CS(res, cs.st.Coeffs), nil
 	default:
 		panic("not implemtented")
@@ -607,7 +605,6 @@ func (system *r1cs) AddCounter(from, to frontend.Tag) {
 		To:            to.Name,
 		NbVariables:   to.VID - from.VID,
 		NbConstraints: to.CID - from.CID,
-		CurveID:       system.CurveID,
 		BackendID:     backend.GROTH16,
 	})
 }
