@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	"github.com/consensys/gnark-crypto/ecc"
+	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 	"github.com/consensys/gnark-crypto/field"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/backend/hint"
@@ -38,7 +39,7 @@ import (
 	bls12377r1cs "github.com/consensys/gnark/internal/backend/bls12-377/cs"
 	bls12381r1cs "github.com/consensys/gnark/internal/backend/bls12-381/cs"
 	bls24315r1cs "github.com/consensys/gnark/internal/backend/bls24-315/cs"
-	bn254r1cs "github.com/consensys/gnark/internal/backend/bn254/cs"
+	bn254r1cs "github.com/consensys/gnark/internal/backend/bn254/cs_generic"
 	bw6633r1cs "github.com/consensys/gnark/internal/backend/bw6-633/cs"
 	bw6761r1cs "github.com/consensys/gnark/internal/backend/bw6-761/cs"
 	"github.com/consensys/gnark/internal/utils"
@@ -410,7 +411,7 @@ func (cs *r1cs) Compile() (frontend.CompiledConstraintSystem, error) {
 	case ecc.BLS12_381.Info().Fr.Modulus().Text(16):
 		return bls12381r1cs.NewR1CS(res, cs.st.Coeffs), nil
 	case ecc.BN254.Info().Fr.Modulus().Text(16):
-		return bn254r1cs.NewR1CS(res, cs.st.Coeffs), nil
+		return bn254r1cs.NewR1CS[fr.Element](res, cs.st.Coeffs), nil
 	case ecc.BW6_761.Info().Fr.Modulus().Text(16):
 		return bw6761r1cs.NewR1CS(res, cs.st.Coeffs), nil
 	case ecc.BW6_633.Info().Fr.Modulus().Text(16):

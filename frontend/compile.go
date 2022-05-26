@@ -6,8 +6,6 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/consensys/gnark"
-	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark-crypto/field"
 	"github.com/consensys/gnark/debug"
 	"github.com/consensys/gnark/frontend/schema"
@@ -150,16 +148,4 @@ func (f *Field[E, ptE]) Modulus() *big.Int {
 	ptE(&qMinusOne).ToBigIntRegular(q)
 	q.SetBit(q, 0, 1) // q - 1 is even
 	return q
-}
-func (f *Field[E, ptE]) Curve() ecc.ID {
-	// temporary hack for smoother refactoring
-	q := f.Modulus()
-
-	for _, c := range gnark.Curves() {
-		if c.Info().Fr.Modulus().Cmp(q) == 0 {
-			return c
-		}
-	}
-
-	panic("not implemented")
 }
