@@ -19,7 +19,6 @@ import (
 	"github.com/consensys/gnark/internal/backend/circuits"
 	"github.com/consensys/gnark/internal/tinyfield"
 	"github.com/consensys/gnark/internal/tinyfield/cs"
-	"github.com/consensys/gnark/internal/utils"
 )
 
 // ignore witness size larger than this bound
@@ -150,16 +149,9 @@ func (p *permutter) solveR1CS() error {
 
 // isSolvedEngine behaves like test.IsSolved except it doesn't clone the circuit
 func isSolvedEngine(c frontend.Circuit, field *big.Int, opts ...TestEngineOption) (err error) {
-	e := &engine{
-		curveID:    utils.FieldToCurve(field),
-		q:          new(big.Int).Set(field),
-		apiWrapper: func(a frontend.API) frontend.API { return a },
-		constVars:  false,
-	}
-	for _, opt := range opts {
-		if err := opt(e); err != nil {
-			return fmt.Errorf("apply option: %w", err)
-		}
+	e, err := newEngine(field, opts...)
+	if err != nil {
+		return err
 	}
 
 	defer func() {
@@ -168,7 +160,7 @@ func isSolvedEngine(c frontend.Circuit, field *big.Int, opts ...TestEngineOption
 		}
 	}()
 
-	api := e.apiWrapper(e)
+	api := e.callApiWrapper()
 	err = c.Define(api)
 
 	return
