@@ -17,6 +17,7 @@ type element[T any] interface {
 	SetOne() *T
 	SetString(string) *T
 	SetInterface(i1 interface{}) (*T, error)
+	SetBigInt(v *big.Int) *T
 	Exp(T, *big.Int) *T
 	Inverse(*T) *T
 	Neg(*T) *T
@@ -27,6 +28,7 @@ type element[T any] interface {
 	Div(*T, *T) *T
 	BitLen() int
 	FromMont() *T
+	ToMont() *T
 	Bit(i uint64) uint64
 	Marshal() []byte
 	IsUint64() bool

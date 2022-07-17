@@ -37,7 +37,12 @@ type toBigIntInterface interface {
 // panics if the input is invalid
 func FromInterface(input interface{}) big.Int {
 	var r big.Int
+	FromInterfaceN(input, &r)
+	return r
+}
 
+// FromInterfaceN see FromInterface -- but takes result as parameter to avoid allocation of big.Int
+func FromInterfaceN(input interface{}, r *big.Int) {
 	switch v := input.(type) {
 	case big.Int:
 		r.Set(&v)
@@ -71,19 +76,19 @@ func FromInterface(input interface{}) big.Int {
 		r.SetBytes(v)
 	default:
 		if v, ok := input.(toBigIntInterface); ok {
-			v.ToBigIntRegular(&r)
-			return r
+			v.ToBigIntRegular(r)
+			return
 		} else if reflect.ValueOf(input).Kind() == reflect.Ptr {
 			vv := reflect.ValueOf(input).Elem()
 			if vv.CanInterface() {
 				if v, ok := vv.Interface().(toBigIntInterface); ok {
-					v.ToBigIntRegular(&r)
-					return r
+					v.ToBigIntRegular(r)
+					return
 				}
 			}
 		}
 		panic(reflect.TypeOf(input).String() + " to big.Int not supported")
 	}
 
-	return r
+	return
 }

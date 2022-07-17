@@ -24,6 +24,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/consensys/gnark/debug"
 	"github.com/consensys/gnark/frontend/schema"
@@ -201,7 +202,6 @@ func (e *engine[E, ptE]) DivUnchecked(i1, i2 frontend.Variable) frontend.Variabl
 	}
 	ptE(&res).Inverse(b2)
 	ptE(&res).Mul(&res, b1)
-	// ptE(&res).Mod(res, e.modulus())
 	return res
 }
 
@@ -232,51 +232,69 @@ func (e *engine[E, ptE]) ToBinary(i1 frontend.Variable, n ...int) []frontend.Var
 	}
 
 	r := make([]frontend.Variable, nbBits)
-	ri := make([]frontend.Variable, nbBits)
+	var one, zero E
+	ptE(&one).SetOne()
 	for i := uint64(0); i < uint64(len(r)); i++ {
-		r[i] = (ptE(b1).Bit(i))
-		ri[i] = r[i]
+		if (ptE(b1).Bit(i)) == 0 {
+			r[i] = zero
+		} else {
+			r[i] = one
+		}
 	}
 
-	// this is a sanity check, it should never happen
-	value := e.toElement(e.FromBinary(ri...))
-	ptE(value).FromMont()
-	if !ptE(value).Equal(b1) {
-		panic(fmt.Sprintf("[ToBinary] decomposing %s (bitLen == %d) with %d bits reconstructs into %s", ptE(b1).String(), ptE(b1).BitLen(), nbBits, ptE(value).String()))
-	}
+	// // this is a sanity check, it should never happen
+	// value := e.toElement(e.FromBinary(ri...))
+	// ptE(value).FromMont()
+	// if !ptE(value).Equal(b1) {
+	// 	panic(fmt.Sprintf("[ToBinary] decomposing %s (bitLen == %d) with %d bits reconstructs into %s", ptE(b1).String(), ptE(b1).BitLen(), nbBits, ptE(value).String()))
+	// }
 	return r
 }
 
 func (e *engine[E, ptE]) FromBinary(v ...frontend.Variable) frontend.Variable {
-	bits := make([]*big.Int, len(v))
+	bits := make([]bool, len(v))
 	for i := 0; i < len(v); i++ {
-		bits[i] = e.toBigInt(v[i])
-		if !(bits[i].IsUint64() && bits[i].Uint64() <= 1) {
-			panic("bit is not boolean ") // TODO @gbotrel fixme
-		}
-		// e.mustBeBoolean(bits[i])
+		be := e.toElement(v[i])
+		// if !(bits[i].IsUint64() && bits[i].Uint64() <= 1) {
+		// 	panic("bit is not boolean ") // TODO @gbotrel fixme
+		// }
+		e.mustBeBoolean(be)
+		bits[i] = ptE(be).Uint64() == 1
 	}
 
 	// Σ (2**i * bits[i]) == r
-	// var r E
-	// var tmp, c E
-	// ptE(&c).SetUint64(1)
-	c := new(big.Int)
-	r := new(big.Int)
-	tmp := new(big.Int)
-	c.SetUint64(1)
+	if len(bits) > e.q.BitLen() {
+		c := new(big.Int)
+		r := new(big.Int)
+		c.SetUint64(1)
+
+		for i := 0; i < len(bits); i++ {
+			if bits[i] {
+				r.Add(r, c)
+			}
+
+			c.Lsh(c, 1)
+		}
+		r.Mod(r, e.q)
+
+		return r
+	}
+
+	var c, r E
+	ptE(&c).SetUint64(1)
+	ptE(&c).FromMont()
 
 	for i := 0; i < len(bits); i++ {
-		tmp.Mul(bits[i], c)
-		r.Add(r, tmp)
-		c.Lsh(c, 1)
-		// ptE(&tmp).Mul(bits[i], &c)
-		// ptE(&r).Add(&r, &tmp)
-		// ptE(&c).Double(&c) // lsh 1
+		if bits[i] {
+			ptE(&r).Add(&r, &c)
+		}
+
+		ptE(&c).Double(&c) // LSH 1
 	}
-	// r.Mod(r, e.modulus())
+	ptE(&r).ToMont()
 
 	return r
+
 }
 
 func (e *engine[E, ptE]) Xor(i1, i2 frontend.Variable) frontend.Variable {
@@ -372,16 +390,10 @@ func (e *engine[E, ptE]) AssertIsBoolean(i1 frontend.Variable) {
 }
 
 func (e *engine[E, ptE]) AssertIsLessOrEqual(v frontend.Variable, bound frontend.Variable) {
-	// TODO @gbotrel may not need big int here, just in case bound is larger than modulus?
-	bValue := e.toBigInt(bound)
-
-	if bValue.Sign() == -1 {
-		panic(fmt.Sprintf("[assertIsLessOrEqual] bound (%s) must be positive", bValue.String()))
-	}
-
-	b1 := e.toBigInt(v)
-	if b1.Cmp(bValue) == 1 {
-		panic(fmt.Sprintf("[assertIsLessOrEqual] %s > %s", b1.String(), bValue.String()))
+	bValue := e.toElement(bound)
+	b1 := e.toElement(v)
+	if ptE(b1).Cmp(bValue) == 1 {
+		panic(fmt.Sprintf("[assertIsLessOrEqual] %s > %s", ptE(b1).String(), ptE(bValue).String()))
 	}
 }
 
@@ -405,6 +417,12 @@ func (e *engine[E, ptE]) Println(a ...frontend.Variable) {
 	fmt.Println(sbb.String())
 }
 
+var bigIntPool = sync.Pool{
+	New: func() interface{} {
+		return new(big.Int)
+	},
+}
+
 func (e *engine[E, ptE]) NewHint(f hint.Function, nbOutputs int, inputs ...frontend.Variable) ([]frontend.Variable, error) {
 
 	if nbOutputs <= 0 {
@@ -414,11 +432,14 @@ func (e *engine[E, ptE]) NewHint(f hint.Function, nbOutputs int, inputs ...front
 	in := make([]*big.Int, len(inputs))
 
 	for i := 0; i < len(inputs); i++ {
-		in[i] = e.toBigInt(inputs[i])
+		// in[i] = e.toBigInt(inputs[i])
+		in[i] = bigIntPool.Get().(*big.Int) // e.toBigInt(inputs[i])
+		el := e.toElement(inputs[i])
+		ptE(el).ToBigIntRegular(in[i])
 	}
 	res := make([]*big.Int, nbOutputs)
 	for i := range res {
-		res[i] = new(big.Int)
+		res[i] = bigIntPool.Get().(*big.Int) // new(big.Int)
 	}
 
 	err := f(e.Field(), in, res)
@@ -431,8 +452,12 @@ func (e *engine[E, ptE]) NewHint(f hint.Function, nbOutputs int, inputs ...front
 	for i := range res {
 		var el E
 		// res[i].Mod(res[i], e.q)
-		ptE(&el).SetInterface(res[i])
+		ptE(&el).SetBigInt(res[i])
+		bigIntPool.Put(res[i])
 		out[i] = el
+	}
+	for i := range in {
+		bigIntPool.Put(in[i])
 	}
 
 	return out, nil
@@ -490,9 +515,14 @@ func (e *engine[E, ptE]) toElement(i1 frontend.Variable) *E {
 	case E:
 		return &vv
 	default:
-		b := utils.FromInterface(i1)
 		var r E
-		ptE(&r).SetInterface(b)
+		_, err := ptE(&r).SetInterface(i1)
+		if err != nil {
+			b := bigIntPool.Get().(*big.Int)
+			utils.FromInterfaceN(i1, b)
+			ptE(&r).SetBigInt(b)
+			bigIntPool.Put(b)
+		}
 		return &r
 	}
 }
@@ -503,7 +533,7 @@ func (e *engine[E, ptE]) FieldBitLen() int {
 }
 
 func (e *engine[E, ptE]) mustBeBoolean(b *E) {
-	if !ptE(b).IsUint64() || !(ptE(b).Uint64() == 0 || ptE(b).Uint64() == 1) {
+	if !ptE(b).IsUint64() || !(ptE(b).Uint64() <= 1) {
 		panic(fmt.Sprintf("[assertIsBoolean] %s", ptE(b).String()))
 	}
 }
