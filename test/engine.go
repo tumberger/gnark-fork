@@ -29,11 +29,18 @@ import (
 	"github.com/consensys/gnark/frontend/schema"
 
 	"github.com/consensys/gnark-crypto/ecc"
-	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/backend/hint"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/internal/utils"
+
+	fr_bls12377 "github.com/consensys/gnark-crypto/ecc/bls12-377/fr"
+	fr_bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
+	fr_bls24315 "github.com/consensys/gnark-crypto/ecc/bls24-315/fr"
+	fr_bls24317 "github.com/consensys/gnark-crypto/ecc/bls24-317/fr"
+	fr_bn254 "github.com/consensys/gnark-crypto/ecc/bn254/fr"
+	fr_bw6633 "github.com/consensys/gnark-crypto/ecc/bw6-633/fr"
+	fr_bw6761 "github.com/consensys/gnark-crypto/ecc/bw6-761/fr"
 )
 
 // engine implements frontend.API
@@ -94,23 +101,6 @@ func WithBackendProverOptions(opts ...backend.ProverOption) TestEngineOption {
 	}
 }
 
-func newEngine(field *big.Int, opts ...TestEngineOption) (api, error) {
-	e := &engine[fr.Element, *fr.Element]{}
-
-	e.curveID = utils.FieldToCurve(field)
-	e.q = new(big.Int).Set(field)
-	e.eOpts = engineOpts{
-		apiWrapper: func(a frontend.API) frontend.API { return a },
-		constVars:  false,
-	}
-	for _, opt := range opts {
-		if err := opt(&e.eOpts); err != nil {
-			return nil, fmt.Errorf("apply option: %w", err)
-		}
-	}
-	return e, nil
-}
-
 // IsSolved returns an error if the test execution engine failed to execute the given circuit
 // with provided witness as input.
 //
@@ -153,9 +143,9 @@ func (e *engine[E, ptE]) callApiWrapper() frontend.API {
 
 func (e *engine[E, ptE]) Add(i1, i2 frontend.Variable, in ...frontend.Variable) frontend.Variable {
 	var res E
-	ptE(&res).Add(e.toBigInt(i1), e.toBigInt(i2))
+	ptE(&res).Add(e.toElement(i1), e.toElement(i2))
 	for i := 0; i < len(in); i++ {
-		ptE(&res).Add(&res, e.toBigInt(in[i]))
+		ptE(&res).Add(&res, e.toElement(in[i]))
 	}
 	// ptE(&res).Mod(res, e.modulus())
 	return res
@@ -163,9 +153,9 @@ func (e *engine[E, ptE]) Add(i1, i2 frontend.Variable, in ...frontend.Variable) 
 
 func (e *engine[E, ptE]) Sub(i1, i2 frontend.Variable, in ...frontend.Variable) frontend.Variable {
 	var res E
-	ptE(&res).Sub(e.toBigInt(i1), e.toBigInt(i2))
+	ptE(&res).Sub(e.toElement(i1), e.toElement(i2))
 	for i := 0; i < len(in); i++ {
-		ptE(&res).Sub(&res, e.toBigInt(in[i]))
+		ptE(&res).Sub(&res, e.toElement(in[i]))
 	}
 	// ptE(&res).Mod(res, e.modulus())
 	return res
@@ -173,17 +163,17 @@ func (e *engine[E, ptE]) Sub(i1, i2 frontend.Variable, in ...frontend.Variable) 
 
 func (e *engine[E, ptE]) Neg(i1 frontend.Variable) frontend.Variable {
 	var res E
-	ptE(&res).Neg(e.toBigInt(i1))
+	ptE(&res).Neg(e.toElement(i1))
 	// ptE(&res).Mod(res, e.modulus())
 	return res
 }
 
 func (e *engine[E, ptE]) Mul(i1, i2 frontend.Variable, in ...frontend.Variable) frontend.Variable {
 	var res E
-	ptE(&res).Mul(e.toBigInt(i1), e.toBigInt(i2))
+	ptE(&res).Mul(e.toElement(i1), e.toElement(i2))
 	// ptE(&res).Mod(res, e.modulus())
 	for i := 0; i < len(in); i++ {
-		ptE(&res).Mul(&res, e.toBigInt(in[i]))
+		ptE(&res).Mul(&res, e.toElement(in[i]))
 		// ptE(&res).Mod(res, e.modulus())
 	}
 	return res
@@ -191,18 +181,18 @@ func (e *engine[E, ptE]) Mul(i1, i2 frontend.Variable, in ...frontend.Variable) 
 
 func (e *engine[E, ptE]) Div(i1, i2 frontend.Variable) frontend.Variable {
 	var res E
-	b2 := e.toBigInt(i2)
+	b2 := e.toElement(i2)
 	if ptE(b2).IsZero() {
 		panic("no inverse")
 	}
 	ptE(&res).Inverse(b2)
-	ptE(&res).Mul(&res, e.toBigInt(i1))
+	ptE(&res).Mul(&res, e.toElement(i1))
 	return res
 }
 
 func (e *engine[E, ptE]) DivUnchecked(i1, i2 frontend.Variable) frontend.Variable {
 	var res E
-	b1, b2 := e.toBigInt(i1), e.toBigInt(i2)
+	b1, b2 := e.toElement(i1), e.toElement(i2)
 	if ptE(b1).IsUint64() && ptE(b2).IsUint64() && ptE(b1).Uint64() == 0 && ptE(b2).Uint64() == 0 {
 		return 0
 	}
@@ -217,7 +207,7 @@ func (e *engine[E, ptE]) DivUnchecked(i1, i2 frontend.Variable) frontend.Variabl
 
 func (e *engine[E, ptE]) Inverse(i1 frontend.Variable) frontend.Variable {
 	var res E
-	b1 := e.toBigInt(i1)
+	b1 := e.toElement(i1)
 	if ptE(b1).IsZero() {
 		panic("no inverse")
 	}
@@ -234,7 +224,7 @@ func (e *engine[E, ptE]) ToBinary(i1 frontend.Variable, n ...int) []frontend.Var
 		}
 	}
 
-	b1 := e.toBigInt(i1)
+	b1 := e.toElement(i1)
 	ptE(b1).FromMont()
 
 	if ptE(b1).BitLen() > nbBits {
@@ -249,7 +239,7 @@ func (e *engine[E, ptE]) ToBinary(i1 frontend.Variable, n ...int) []frontend.Var
 	}
 
 	// this is a sanity check, it should never happen
-	value := e.toBigInt(e.FromBinary(ri...))
+	value := e.toElement(e.FromBinary(ri...))
 	ptE(value).FromMont()
 	if !ptE(value).Equal(b1) {
 		panic(fmt.Sprintf("[ToBinary] decomposing %s (bitLen == %d) with %d bits reconstructs into %s", ptE(b1).String(), ptE(b1).BitLen(), nbBits, ptE(value).String()))
@@ -260,7 +250,7 @@ func (e *engine[E, ptE]) ToBinary(i1 frontend.Variable, n ...int) []frontend.Var
 func (e *engine[E, ptE]) FromBinary(v ...frontend.Variable) frontend.Variable {
 	bits := make([]*big.Int, len(v))
 	for i := 0; i < len(v); i++ {
-		bits[i] = e.toBigIntREAL(v[i])
+		bits[i] = e.toBigInt(v[i])
 		if !(bits[i].IsUint64() && bits[i].Uint64() <= 1) {
 			panic("bit is not boolean ") // TODO @gbotrel fixme
 		}
@@ -290,7 +280,7 @@ func (e *engine[E, ptE]) FromBinary(v ...frontend.Variable) frontend.Variable {
 }
 
 func (e *engine[E, ptE]) Xor(i1, i2 frontend.Variable) frontend.Variable {
-	b1, b2 := e.toBigInt(i1), e.toBigInt(i2)
+	b1, b2 := e.toElement(i1), e.toElement(i2)
 	e.mustBeBoolean(b1)
 	e.mustBeBoolean(b2)
 	var res E
@@ -299,7 +289,7 @@ func (e *engine[E, ptE]) Xor(i1, i2 frontend.Variable) frontend.Variable {
 }
 
 func (e *engine[E, ptE]) Or(i1, i2 frontend.Variable) frontend.Variable {
-	b1, b2 := e.toBigInt(i1), e.toBigInt(i2)
+	b1, b2 := e.toElement(i1), e.toElement(i2)
 	e.mustBeBoolean(b1)
 	e.mustBeBoolean(b2)
 	var res E
@@ -308,7 +298,7 @@ func (e *engine[E, ptE]) Or(i1, i2 frontend.Variable) frontend.Variable {
 }
 
 func (e *engine[E, ptE]) And(i1, i2 frontend.Variable) frontend.Variable {
-	b1, b2 := e.toBigInt(i1), e.toBigInt(i2)
+	b1, b2 := e.toElement(i1), e.toElement(i2)
 	e.mustBeBoolean(b1)
 	e.mustBeBoolean(b2)
 	var res E
@@ -318,32 +308,32 @@ func (e *engine[E, ptE]) And(i1, i2 frontend.Variable) frontend.Variable {
 
 // Select if b is true, yields i1 else yields i2
 func (e *engine[E, ptE]) Select(b frontend.Variable, i1, i2 frontend.Variable) frontend.Variable {
-	b1 := e.toBigInt(b)
+	b1 := e.toElement(b)
 	e.mustBeBoolean(b1)
 
 	if ptE(b1).Uint64() == 1 {
-		return e.toBigInt(i1)
+		return e.toElement(i1)
 	}
-	return (e.toBigInt(i2))
+	return (e.toElement(i2))
 }
 
 // Lookup2 performs a 2-bit lookup between i1, i2, i3, i4 based on bits b0
 // and b1. Returns i0 if b0=b1=0, i1 if b0=1 and b1=0, i2 if b0=0 and b1=1
 // and i3 if b0=b1=1.
 func (e *engine[E, ptE]) Lookup2(b0, b1 frontend.Variable, i0, i1, i2, i3 frontend.Variable) frontend.Variable {
-	s0 := e.toBigInt(b0)
-	s1 := e.toBigInt(b1)
+	s0 := e.toElement(b0)
+	s1 := e.toElement(b1)
 	e.mustBeBoolean(s0)
 	e.mustBeBoolean(s1)
 	var lookup E
 	ptE(&lookup).Double(s1)
 	ptE(&lookup).Add(&lookup, s0)
-	return e.toBigInt([]frontend.Variable{i0, i1, i2, i3}[ptE(&lookup).Uint64()])
+	return e.toElement([]frontend.Variable{i0, i1, i2, i3}[ptE(&lookup).Uint64()])
 }
 
 // IsZero returns 1 if a is zero, 0 otherwise
 func (e *engine[E, ptE]) IsZero(i1 frontend.Variable) frontend.Variable {
-	b1 := e.toBigInt(i1)
+	b1 := e.toElement(i1)
 
 	if ptE(b1).IsUint64() && ptE(b1).Uint64() == 0 {
 		return big.NewInt(1)
@@ -354,8 +344,8 @@ func (e *engine[E, ptE]) IsZero(i1 frontend.Variable) frontend.Variable {
 
 // Cmp returns 1 if i1>i2, 0 if i1==i2, -1 if i1<i2
 func (e *engine[E, ptE]) Cmp(i1, i2 frontend.Variable) frontend.Variable {
-	b1 := e.toBigInt(i1)
-	b2 := e.toBigInt(i2)
+	b1 := e.toElement(i1)
+	b2 := e.toElement(i2)
 	var res E
 	ptE(&res).SetInt64(int64(ptE(b1).Cmp(b2)))
 	// ptE(&res).Mod(res, e.modulus())
@@ -363,33 +353,33 @@ func (e *engine[E, ptE]) Cmp(i1, i2 frontend.Variable) frontend.Variable {
 }
 
 func (e *engine[E, ptE]) AssertIsEqual(i1, i2 frontend.Variable) {
-	b1, b2 := e.toBigInt(i1), e.toBigInt(i2)
+	b1, b2 := e.toElement(i1), e.toElement(i2)
 	if !ptE(b1).Equal(b2) {
 		panic(fmt.Sprintf("[assertIsEqual] %s == %s", ptE(b1).String(), ptE(b2).String()))
 	}
 }
 
 func (e *engine[E, ptE]) AssertIsDifferent(i1, i2 frontend.Variable) {
-	b1, b2 := e.toBigInt(i1), e.toBigInt(i2)
+	b1, b2 := e.toElement(i1), e.toElement(i2)
 	if ptE(b1).Equal(b2) {
 		panic(fmt.Sprintf("[assertIsDifferent] %s != %s", ptE(b1).String(), ptE(b2).String()))
 	}
 }
 
 func (e *engine[E, ptE]) AssertIsBoolean(i1 frontend.Variable) {
-	b1 := e.toBigInt(i1)
+	b1 := e.toElement(i1)
 	e.mustBeBoolean(b1)
 }
 
 func (e *engine[E, ptE]) AssertIsLessOrEqual(v frontend.Variable, bound frontend.Variable) {
 	// TODO @gbotrel may not need big int here, just in case bound is larger than modulus?
-	bValue := e.toBigIntREAL(bound)
+	bValue := e.toBigInt(bound)
 
 	if bValue.Sign() == -1 {
 		panic(fmt.Sprintf("[assertIsLessOrEqual] bound (%s) must be positive", bValue.String()))
 	}
 
-	b1 := e.toBigIntREAL(v)
+	b1 := e.toBigInt(v)
 	if b1.Cmp(bValue) == 1 {
 		panic(fmt.Sprintf("[assertIsLessOrEqual] %s > %s", b1.String(), bValue.String()))
 	}
@@ -408,7 +398,7 @@ func (e *engine[E, ptE]) Println(a ...frontend.Variable) {
 	}
 
 	for i := 0; i < len(a); i++ {
-		v := e.toBigInt(a[i])
+		v := e.toElement(a[i])
 		sbb.WriteString(ptE(v).String())
 		sbb.WriteByte(' ')
 	}
@@ -424,7 +414,7 @@ func (e *engine[E, ptE]) NewHint(f hint.Function, nbOutputs int, inputs ...front
 	in := make([]*big.Int, len(inputs))
 
 	for i := 0; i < len(inputs); i++ {
-		in[i] = e.toBigIntREAL(inputs[i])
+		in[i] = e.toBigInt(inputs[i])
 	}
 	res := make([]*big.Int, nbOutputs)
 	for i := range res {
@@ -439,8 +429,10 @@ func (e *engine[E, ptE]) NewHint(f hint.Function, nbOutputs int, inputs ...front
 
 	out := make([]frontend.Variable, len(res))
 	for i := range res {
-		res[i].Mod(res[i], e.q)
-		out[i] = res[i]
+		var el E
+		// res[i].Mod(res[i], e.q)
+		ptE(&el).SetInterface(res[i])
+		out[i] = el
 	}
 
 	return out, nil
@@ -453,12 +445,13 @@ func (e *engine[E, ptE]) IsConstant(v frontend.Variable) bool {
 
 // ConstantValue returns the big.Int value of v
 func (e *engine[E, ptE]) ConstantValue(v frontend.Variable) (*big.Int, bool) {
-	r := e.toBigIntREAL(v)
+	r := e.toBigInt(v)
+	// TODO @gbotrel could avoid mod op here by using elements
 	return r, e.eOpts.constVars
 }
 
 func (e *engine[E, ptE]) IsBoolean(v frontend.Variable) bool {
-	r := e.toBigInt(v)
+	r := e.toElement(v)
 	return ptE(r).IsUint64() && ptE(r).Uint64() <= 1
 }
 
@@ -477,7 +470,7 @@ func (e *engine[E, ptE]) AddCounter(from, to frontend.Tag) {
 	// do nothing, we don't measure constraints with the test engine
 }
 
-func (e *engine[E, ptE]) toBigIntREAL(i1 frontend.Variable) *big.Int {
+func (e *engine[E, ptE]) toBigInt(i1 frontend.Variable) *big.Int {
 	switch vv := i1.(type) {
 	case *big.Int:
 		return vv
@@ -485,12 +478,12 @@ func (e *engine[E, ptE]) toBigIntREAL(i1 frontend.Variable) *big.Int {
 		return &vv
 	default:
 		b := utils.FromInterface(i1)
-		b.Mod(&b, e.modulus())
+		b.Mod(&b, e.q)
 		return &b
 	}
 }
 
-func (e *engine[E, ptE]) toBigInt(i1 frontend.Variable) *E {
+func (e *engine[E, ptE]) toElement(i1 frontend.Variable) *E {
 	switch vv := i1.(type) {
 	case *E:
 		return vv
@@ -513,10 +506,6 @@ func (e *engine[E, ptE]) mustBeBoolean(b *E) {
 	if !ptE(b).IsUint64() || !(ptE(b).Uint64() == 0 || ptE(b).Uint64() == 1) {
 		panic(fmt.Sprintf("[assertIsBoolean] %s", ptE(b).String()))
 	}
-}
-
-func (e *engine[E, ptE]) modulus() *big.Int {
-	return e.q
 }
 
 // shallowClone clones given circuit
@@ -577,4 +566,136 @@ func (e *engine[E, ptE]) Field() *big.Int {
 
 func (e *engine[E, ptE]) Compiler() frontend.Compiler {
 	return e
+}
+
+func newEngine(field *big.Int, opts ...TestEngineOption) (api, error) {
+	// yet another "type switch", yes, it's ugly, but it keeps generic away from user-facing api for now.
+	if field.Cmp(ecc.BN254.ScalarField()) == 0 {
+		e := &engine[fr_bn254.Element, *fr_bn254.Element]{
+			curveID: utils.FieldToCurve(field),
+			q:       new(big.Int).Set(field),
+			eOpts: engineOpts{
+				apiWrapper: func(a frontend.API) frontend.API { return a },
+				constVars:  false,
+			},
+		}
+
+		for _, opt := range opts {
+			if err := opt(&e.eOpts); err != nil {
+				return nil, fmt.Errorf("apply option: %w", err)
+			}
+		}
+		return e, nil
+	}
+
+	if field.Cmp(ecc.BLS12_381.ScalarField()) == 0 {
+		e := &engine[fr_bls12381.Element, *fr_bls12381.Element]{
+			curveID: utils.FieldToCurve(field),
+			q:       new(big.Int).Set(field),
+			eOpts: engineOpts{
+				apiWrapper: func(a frontend.API) frontend.API { return a },
+				constVars:  false,
+			},
+		}
+
+		for _, opt := range opts {
+			if err := opt(&e.eOpts); err != nil {
+				return nil, fmt.Errorf("apply option: %w", err)
+			}
+		}
+		return e, nil
+	}
+
+	if field.Cmp(ecc.BLS12_377.ScalarField()) == 0 {
+		e := &engine[fr_bls12377.Element, *fr_bls12377.Element]{
+			curveID: utils.FieldToCurve(field),
+			q:       new(big.Int).Set(field),
+			eOpts: engineOpts{
+				apiWrapper: func(a frontend.API) frontend.API { return a },
+				constVars:  false,
+			},
+		}
+
+		for _, opt := range opts {
+			if err := opt(&e.eOpts); err != nil {
+				return nil, fmt.Errorf("apply option: %w", err)
+			}
+		}
+		return e, nil
+	}
+
+	if field.Cmp(ecc.BLS24_315.ScalarField()) == 0 {
+		e := &engine[fr_bls24315.Element, *fr_bls24315.Element]{
+			curveID: utils.FieldToCurve(field),
+			q:       new(big.Int).Set(field),
+			eOpts: engineOpts{
+				apiWrapper: func(a frontend.API) frontend.API { return a },
+				constVars:  false,
+			},
+		}
+
+		for _, opt := range opts {
+			if err := opt(&e.eOpts); err != nil {
+				return nil, fmt.Errorf("apply option: %w", err)
+			}
+		}
+		return e, nil
+	}
+
+	if field.Cmp(ecc.BLS24_317.ScalarField()) == 0 {
+		e := &engine[fr_bls24317.Element, *fr_bls24317.Element]{
+			curveID: utils.FieldToCurve(field),
+			q:       new(big.Int).Set(field),
+			eOpts: engineOpts{
+				apiWrapper: func(a frontend.API) frontend.API { return a },
+				constVars:  false,
+			},
+		}
+
+		for _, opt := range opts {
+			if err := opt(&e.eOpts); err != nil {
+				return nil, fmt.Errorf("apply option: %w", err)
+			}
+		}
+		return e, nil
+	}
+
+	if field.Cmp(ecc.BW6_633.ScalarField()) == 0 {
+		e := &engine[fr_bw6633.Element, *fr_bw6633.Element]{
+			curveID: utils.FieldToCurve(field),
+			q:       new(big.Int).Set(field),
+			eOpts: engineOpts{
+				apiWrapper: func(a frontend.API) frontend.API { return a },
+				constVars:  false,
+			},
+		}
+
+		for _, opt := range opts {
+			if err := opt(&e.eOpts); err != nil {
+				return nil, fmt.Errorf("apply option: %w", err)
+			}
+		}
+		return e, nil
+	}
+
+	if field.Cmp(ecc.BW6_761.ScalarField()) == 0 {
+		e := &engine[fr_bw6761.Element, *fr_bw6761.Element]{
+			curveID: utils.FieldToCurve(field),
+			q:       new(big.Int).Set(field),
+			eOpts: engineOpts{
+				apiWrapper: func(a frontend.API) frontend.API { return a },
+				constVars:  false,
+			},
+		}
+
+		for _, opt := range opts {
+			if err := opt(&e.eOpts); err != nil {
+				return nil, fmt.Errorf("apply option: %w", err)
+			}
+		}
+		return e, nil
+	}
+
+	// TODO @gbotrel could wrap big.Int in a struct that implements element constraints
+	panic("unsupported modulus in test engine")
 }
