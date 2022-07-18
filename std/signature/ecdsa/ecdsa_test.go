@@ -17,12 +17,13 @@ limitations under the License.
 package ecdsa
 
 import (
-	"fmt"
 	"math/big"
 	"testing"
 
+	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/std/math/nonnative"
+	"github.com/consensys/gnark/test"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 )
@@ -134,50 +135,35 @@ func TestEcdsa(t *testing.T) {
 		t.Errorf("can't verify signature with uncompressed key")
 	}
 
-	var r, s, m, px, py, bx, by big.Int
-	r.SetBytes(sig[:32])
-	s.SetBytes(sig[32:])
-	m.SetBytes(msg)
-	px.SetBytes(pub[:32])
-	py.SetBytes(pub[32:])
-
-	fmt.Printf("%s\n", px.String())
-	fmt.Printf("%s\n", py.String())
-
-	bx.Set(secp256k1.S256().Gx)
-	by.Set(secp256k1.S256().Gy)
-
-	fields := getFpFr(t)
-
 	// circuit
+	fields := getFpFr(t)
 	var circuit EcdsaTest
 	circuit.Fp = fields[0].params
 	circuit.Fr = fields[1].params
 
 	// witness
+	var r, s, m big.Int
+	r.SetBytes(sig[:32])
+	s.SetBytes(sig[32:])
+	m.SetBytes(msg)
+
+	_pub, err := crypto.UnmarshalPubkey(pub)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var witness EcdsaTest
 	witness.Fp = fields[0].params
 	witness.Fr = fields[1].params
-	// witness.PublicKey.X = witness.Fr.ConstantFromBigOrPanic()
-
-	// fmt.Printf("R = %s\n", r.String())
-	// fmt.Printf("S = %s\n", s.String())
-	// fmt.Printf("m = %s\n", m.String())
-
-	// _pub, err := crypto.UnmarshalPubkey(pub)
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
-
-	// secpCurve := secp256k1.S256()
-	// fmt.Printf("Gx: %s\n", secpCurve.Gx.String())
-	// fmt.Printf("Gy: %s\n", secpCurve.Gy.String())
-	// n := secpCurve.Params().N.BitLen()
-	// fmt.Printf("secpCurve.Params().N.BitLen(): %d\n", n)
-
-	// fmt.Printf("X: %s\n", _pub.X.String())
-	// fmt.Printf("Y: %s\n", _pub.Y.String())
+	witness.PublicKey.X = witness.Fp.ConstantFromBigOrPanic(_pub.X)
+	witness.PublicKey.Y = witness.Fp.ConstantFromBigOrPanic(_pub.Y)
+	witness.Base.X = witness.Fp.ConstantFromBigOrPanic(secp256k1.S256().Gx)
+	witness.Base.Y = witness.Fp.ConstantFromBigOrPanic(secp256k1.S256().Gy)
+	witness.Signature.R = witness.Fr.ConstantFromBigOrPanic(&r)
+	witness.Signature.S = witness.Fr.ConstantFromBigOrPanic(&s)
+	witness.Signature.M = witness.Fr.ConstantFromBigOrPanic(&m)
 
 	// check the circuit
-
+	assert := test.NewAssert(t)
+	err = test.IsSolved(&circuit, &witness, ecc.BN254.ScalarField())
+	assert.NoError(err)
 }
