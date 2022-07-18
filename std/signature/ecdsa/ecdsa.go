@@ -14,10 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package secp256k1
+package ecdsa
 
 import (
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/algebra/secp256k1"
 	"github.com/consensys/gnark/std/math/nonnative"
 )
 
@@ -29,14 +30,14 @@ type Sig struct {
 
 // Public ECDSA key.
 // Its coordinates are in Fp, the field of definition of the elliptic curve.
-type PublicKey = GAffine
+type PublicKey = secp256k1.GAffine
 
 // VerifySignature
 // sig signature
 // pub public key
 // m message
 // apiR, apiP respectevely the api for the curve group and field of definition
-func VerifySignature(sig Sig, pub PublicKey, G GAffine, apiR, apiP frontend.API) {
+func VerifySignature(sig Sig, pub PublicKey, G secp256k1.GAffine, apiR, apiP frontend.API) {
 
 	// S**-1*m, S**-1*R
 	sInv := apiR.Inverse(sig.S)
@@ -46,7 +47,7 @@ func VerifySignature(sig Sig, pub PublicKey, G GAffine, apiR, apiP frontend.API)
 	// [S**-1*m]G + [S**-1*R]pub
 	msInvBits := apiR.ToBinary(msInv, 256)
 	rsInvBits := apiR.ToBinary(rsInv, 256)
-	var qa, qb GAffine
+	var qa, qb secp256k1.GAffine
 	qa.ScalarMulBits(apiP, G, msInvBits)
 	qb.ScalarMulBits(apiP, pub, rsInvBits)
 	qa.Add(apiP, qa, qb)
