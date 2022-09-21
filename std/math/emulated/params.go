@@ -34,8 +34,9 @@ func (fp Goldilocks) BitsPerLimb() uint { return 64 }
 func (fp Goldilocks) IsPrime() bool     { return true }
 func (fp Goldilocks) Modulus() *big.Int { return qGoldilocks }
 
-// Secp256k1 provide type parametrization for emulated field on 8 limb of width 32bits
-// for modulus 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f
+// Secp256k1 provide type parametrization for emulated field on 4 limb of width 64bits
+// for modulus 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f.
+// This is the base field of secp256k1 curve
 type Secp256k1 struct{}
 
 func (fp Secp256k1) NbLimbs() uint     { return 4 }
@@ -43,6 +44,9 @@ func (fp Secp256k1) BitsPerLimb() uint { return 64 }
 func (fp Secp256k1) IsPrime() bool     { return true }
 func (fp Secp256k1) Modulus() *big.Int { return qSecp256k1 }
 
+// Secp256k1Scalars provides type parametrization for emulated field on 4 limbs of width 64bits
+// for modulus 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141.
+// This is the scalar field of secp256k1 curve.
 type Secp256k1Scalars struct{}
 
 func (fp Secp256k1Scalars) NbLimbs() uint     { return 4 }
