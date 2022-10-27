@@ -6,32 +6,16 @@ import (
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/frontend"
-	"github.com/consensys/gnark/std/polynomial"
 	"github.com/consensys/gnark/std/sumcheck"
 	"github.com/consensys/gnark/test"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 )
 
 func TestSingleIdentityGateTwoInstances(t *testing.T) {
 	generateTestVerifier("./test_vectors/single_identity_gate_two_instances.json")(t)
-}
-
-func int64SliceToVariableSlice(int64Slice []int64) (variableSlice []frontend.Variable) {
-	variableSlice = make([]frontend.Variable, 0, len(int64Slice))
-
-	for _, v := range int64Slice {
-		variableSlice = append(variableSlice, v)
-	}
-
-	return
-}
-
-func int64SliceToMultiLin(int64Slice []int64) polynomial.MultiLin { //Only semantics
-	return int64SliceToVariableSlice(int64Slice)
 }
 
 func TestGkrVectors(t *testing.T) {
@@ -136,12 +120,7 @@ func interleaveProof(partialSumPolys [][][][]frontend.Variable, finalEvalProofs 
 			panic("malformed prof")
 		}
 		for j := range proof[i] {
-			proof[i][j].PartialSumPolys = make([]polynomial.Polynomial, len(partialSumPolys[i][j]))
-			for k, polyK := range partialSumPolys[i][j] {
-				proof[i][j].PartialSumPolys[k] = polyK
-			}
-
-			proof[i][j].FinalEvalProof = finalEvalProofs[i][j]
+			proof[i][j] = interleaveSumcheckProof(partialSumPolys[i][j], finalEvalProofs[i][j])
 		}
 	}
 	return proof
@@ -155,47 +134,10 @@ func separateProof(proof Proof) (partialSumPolys [][][][]frontend.Variable, fina
 		partialSumPolys[i] = make([][][]frontend.Variable, len(pI))
 		finalEvalProofs[i] = make([][]frontend.Variable, len(pI))
 		for j, pIJ := range pI {
-			if pIJ.FinalEvalProof == nil {
-				finalEvalProofs[i][j] = nil
-			} else {
-				finalEvalProofs[i][j] = pIJ.FinalEvalProof.([]frontend.Variable)
-			}
-			partialSumPolys[i][j] = make([][]frontend.Variable, len(pIJ.PartialSumPolys))
-			for k := range pIJ.PartialSumPolys {
-				partialSumPolys[i][j][k] = pIJ.PartialSumPolys[k]
-			}
+			partialSumPolys[i][j], finalEvalProofs[i][j] = separateSumcheckProof(pIJ)
 		}
 	}
 	return
-}
-
-func hollow[K any](x K) K { //TODO: This but with generics or reflection
-	switch X := interface{}(x).(type) {
-	case []frontend.Variable:
-		res := interface{}(make([]frontend.Variable, len(X)))
-		return res.(K)
-	case [][]frontend.Variable:
-		res := make([][]frontend.Variable, len(X))
-		for i, xI := range X {
-			res[i] = hollow(xI)
-		}
-		return interface{}(res).(K)
-	case [][][]frontend.Variable:
-		res := make([][][]frontend.Variable, len(X))
-		for i, xI := range X {
-			res[i] = hollow(xI)
-		}
-		return interface{}(res).(K)
-
-	case [][][][]frontend.Variable:
-		res := make([][][][]frontend.Variable, len(X))
-		for i, xI := range X {
-			res[i] = hollow(xI)
-		}
-		return interface{}(res).(K)
-	default:
-		panic("cannot hollow out type " + reflect.TypeOf(x).String())
-	}
 }
 
 func (a WireAssignment) addLayerValuations(layer CircuitLayer, values [][]frontend.Variable) {
@@ -417,51 +359,17 @@ func (m mimcCipherGate) Degree() int {
 	return 7
 }
 
-func sliceToVariableSlice(v []interface{}) (varSlice []frontend.Variable) {
-	varSlice = make([]frontend.Variable, len(v))
-	for i, vI := range v {
-		varSlice[i] = toVariable(vI)
-	}
-	return
-}
-
 type PrintableProof [][]PrintableSumcheckProof
-
-type PrintableSumcheckProof struct {
-	FinalEvalProof  interface{}     `json:"finalEvalProof"`
-	PartialSumPolys [][]interface{} `json:"partialSumPolys"`
-}
 
 func unmarshalProof(printable PrintableProof) (proof Proof) {
 	proof = make(Proof, len(printable))
 	for i := range printable {
 		proof[i] = make([]sumcheck.Proof, len(printable[i]))
 		for j, printableSumcheck := range printable[i] {
-
-			if printableSumcheck.FinalEvalProof != nil {
-				finalEvalSlice := reflect.ValueOf(printableSumcheck.FinalEvalProof)
-				finalEvalProof := make([]frontend.Variable, finalEvalSlice.Len())
-				for k := range finalEvalProof {
-					finalEvalProof[k] = toVariable(finalEvalSlice.Index(k).Interface())
-				}
-				proof[i][j].FinalEvalProof = finalEvalProof
-			} else {
-				proof[i][j].FinalEvalProof = nil
-			}
-
-			proof[i][j].PartialSumPolys = make([]polynomial.Polynomial, len(printableSumcheck.PartialSumPolys))
-			for k := range printableSumcheck.PartialSumPolys {
-				proof[i][j].PartialSumPolys[k] = toVariableSlice(printableSumcheck.PartialSumPolys[k])
-			}
+			proof[i][j] = unmarshalSumcheckProof(printableSumcheck)
 		}
 	}
 	return
-}
-
-func TestHollow(t *testing.T) {
-	toHollow := []frontend.Variable{1, 2, 3}
-	hollowed := hollow(toHollow)
-	assert.Equal(t, 3, len(hollowed))
 }
 
 func TestSet(t *testing.T) {

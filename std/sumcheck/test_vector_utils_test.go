@@ -1,4 +1,4 @@
-package gkr
+package sumcheck
 
 import (
 	"encoding/json"
@@ -6,10 +6,12 @@ import (
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/polynomial"
 	"github.com/consensys/gnark/test"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -111,6 +113,14 @@ func toVariable(v interface{}) frontend.Variable {
 	}
 }
 
+func sliceToVariableSlice(v []interface{}) (varSlice []frontend.Variable) {
+	varSlice = make([]frontend.Variable, len(v))
+	for i, vI := range v {
+		varSlice[i] = toVariable(vI)
+	}
+	return
+}
+
 func ReadMap(in map[string]interface{}) HashMap {
 	single := Map{
 		keys:   make([]frontend.Variable, 0),
@@ -185,6 +195,30 @@ func toVariableSlice[V any](slice []V) (variableSlice []frontend.Variable) {
 	variableSlice = make([]frontend.Variable, len(slice))
 	for i, v := range slice {
 		variableSlice[i] = toVariable(v)
+	}
+	return
+}
+
+type PrintableSumcheckProof struct {
+	FinalEvalProof  interface{}     `json:"finalEvalProof"`
+	PartialSumPolys [][]interface{} `json:"partialSumPolys"`
+}
+
+func unmarshalSumcheckProof(printable PrintableSumcheckProof) (proof Proof) {
+	if printable.FinalEvalProof != nil {
+		finalEvalSlice := reflect.ValueOf(printable.FinalEvalProof)
+		finalEvalProof := make([]frontend.Variable, finalEvalSlice.Len())
+		for k := range finalEvalProof {
+			finalEvalProof[k] = toVariable(finalEvalSlice.Index(k).Interface())
+		}
+		proof.FinalEvalProof = finalEvalProof
+	} else {
+		proof.FinalEvalProof = nil
+	}
+
+	proof.PartialSumPolys = make([]polynomial.Polynomial, len(printable.PartialSumPolys))
+	for k := range printable.PartialSumPolys {
+		proof.PartialSumPolys[k] = toVariableSlice(printable.PartialSumPolys[k])
 	}
 	return
 }
@@ -381,7 +415,7 @@ func (m HashMap) hash(api frontend.API, x ...frontend.Variable) frontend.Variabl
 }
 
 func (m *MapHashTranscript) Update(api frontend.API, x ...frontend.Variable) {
-	api.Println("input to update of size ", len(x), ". first input =", x[0])
+	//api.Println("input to update of size ", len(x), ". first input =", x[0])
 	if len(x) > 0 {
 		for _, xI := range x {
 
@@ -400,7 +434,7 @@ func (m *MapHashTranscript) Update(api frontend.API, x ...frontend.Variable) {
 		m.state = m.hashMap.hash(api, m.state)
 	}
 	m.resultAvailable = true
-	api.Println("Hash state is now ", m.state)
+	//api.Println("Hash state is now ", m.state)
 }
 
 func (m *MapHashTranscript) Next(api frontend.API, x ...frontend.Variable) frontend.Variable {
@@ -453,4 +487,56 @@ func TestTranscript(t *testing.T) {
 		&TestTranscriptCircuit{[]frontend.Variable{1, 1, 2}},
 		test.WithBackends(backend.GROTH16), test.WithCurves(ecc.BN254),
 	)
+}
+
+func separateSumcheckProof(proof Proof) (partialSumPolys [][]frontend.Variable, finalEvalProof []frontend.Variable) {
+	if proof.FinalEvalProof == nil {
+		finalEvalProof = nil
+	} else {
+		finalEvalProof = proof.FinalEvalProof.([]frontend.Variable)
+	}
+	partialSumPolys = make([][]frontend.Variable, len(proof.PartialSumPolys))
+	for k := range proof.PartialSumPolys {
+		partialSumPolys[k] = proof.PartialSumPolys[k]
+	}
+	return
+}
+
+func interleaveSumcheckProof(partialSumPolys [][]frontend.Variable, finalEvalProof []frontend.Variable) (proof Proof) {
+	proof.PartialSumPolys = make([]polynomial.Polynomial, len(partialSumPolys))
+	for k, polyK := range partialSumPolys {
+		proof.PartialSumPolys[k] = polyK
+	}
+
+	proof.FinalEvalProof = finalEvalProof
+	return
+}
+
+func hollow[K any](x K) K { //TODO: This but with generics or reflection
+	switch X := interface{}(x).(type) {
+	case []frontend.Variable:
+		res := interface{}(make([]frontend.Variable, len(X)))
+		return res.(K)
+	case [][]frontend.Variable:
+		res := make([][]frontend.Variable, len(X))
+		for i, xI := range X {
+			res[i] = hollow(xI)
+		}
+		return interface{}(res).(K)
+	case [][][]frontend.Variable:
+		res := make([][][]frontend.Variable, len(X))
+		for i, xI := range X {
+			res[i] = hollow(xI)
+		}
+		return interface{}(res).(K)
+
+	case [][][][]frontend.Variable:
+		res := make([][][][]frontend.Variable, len(X))
+		for i, xI := range X {
+			res[i] = hollow(xI)
+		}
+		return interface{}(res).(K)
+	default:
+		panic("cannot hollow out type " + reflect.TypeOf(x).String())
+	}
 }
