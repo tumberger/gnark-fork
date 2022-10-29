@@ -196,7 +196,7 @@ func Verify(api frontend.API, c Circuit, assignment WireAssignment, proof Proof,
 				api.AssertIsEqual(claim.claimedEvaluations[0], evaluation)
 
 			} else {
-				fmt.Println(layerI)
+				// TODO: Incorporate the claims into transcript here
 				if err := sumcheck.Verify(api, claim, proof[layerI][wireI], transcript); err != nil {
 					return err
 				}
