@@ -54,8 +54,11 @@ func Verify(proof *Proof, vk *VerifyingKey, publicWitness bn254witness.Witness) 
 
 	// The first challenge is derived using the public data: the commitments to the permutation,
 	// the coefficients of the circuit, and the public inputs.
-	// derive gamma from the Comm(blinded cl), Comm(blinded cr), Comm(blinded co)
+	// AND the solution: Comm(blinded cl), Comm(blinded cr), Comm(blinded co)
 	if err := bindPublicData(&fs, "gamma", *vk, publicWitness); err != nil {
+		return err
+	}
+	if err := bindSolution(&fs, "gamma", proof.LRO); err != nil {
 		return err
 	}
 	bgamma, err := fs.ComputeChallenge("gamma")
@@ -247,6 +250,21 @@ func Verify(proof *Proof, vk *VerifyingKey, publicWitness bn254witness.Witness) 
 	log.Debug().Dur("took", time.Since(start)).Msg("verifier done")
 
 	return err
+}
+
+func bindSolution(fs *fiatshamir.Transcript, challenge string, lro [3]kzg.Digest) error {
+
+	if err := fs.Bind(challenge, lro[0].Marshal()); err != nil {
+		return err
+	}
+	if err := fs.Bind(challenge, lro[1].Marshal()); err != nil {
+		return err
+	}
+	if err := fs.Bind(challenge, lro[2].Marshal()); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func bindPublicData(fs *fiatshamir.Transcript, challenge string, vk VerifyingKey, publicInputs []fr.Element) error {
