@@ -92,7 +92,7 @@ func (t *Transcript) Bind(challengeID string, values []frontend.Variable) error 
 // ComputeChallenge computes the challenge corresponding to the given name.
 // The resulting variable is:
 // * H(name ∥ previous_challenge ∥ binded_values...) if the challenge is not the first one
-// * H(name ∥ binded_values... ) if it's is the first challenge
+// * H(name ∥ binded_values... ) if it is the first challenge
 func (t *Transcript) ComputeChallenge(challengeID string) (frontend.Variable, error) {
 
 	challenge, ok := t.challenges[challengeID]
@@ -110,6 +110,7 @@ func (t *Transcript) ComputeChallenge(challengeID string) (frontend.Variable, er
 
 	// write the challenge name, the purpose is to have a domain separator
 	cChallenge := []byte(challengeID) // if we send a string, it is assumed to be a base10 number
+
 	t.h.Write(cChallenge)
 
 	// write the previous challenge if it's not the first challenge
