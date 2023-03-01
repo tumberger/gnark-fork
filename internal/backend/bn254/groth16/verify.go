@@ -36,7 +36,7 @@ var (
 // Verify verifies a proof with given VerifyingKey and publicWitness
 func Verify(proof *Proof, vk *VerifyingKey, publicWitness fr.Vector) error {
 
-	if len(publicWitness)+len(vk.InjectedVariables) != len(vk.G1.K) {
+	if len(publicWitness)+len(vk.InjectedVariables) != len(vk.G1.K)-1 {
 		return fmt.Errorf("invalid witness size, got %d, expected %d (public - ONE_WIRE)", len(publicWitness), len(vk.G1.K)-1)
 	}
 	log := logger.Logger().With().Str("curve", vk.CurveID().String()).Str("backend", "groth16").Logger()
