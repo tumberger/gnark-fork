@@ -20,10 +20,12 @@ type solution struct {
 	nbSolved             uint64
 	mHintsFunctions      map[hint.ID]hint.Function 	// maps hintID to hint function
 	mHints 				 map[int]*constraint.Hint 	// maps wireID to hint
+	mInjected            map[int]constraint.InjectedVariable
+	injectors            map[string]VariableInjector
 	st *debug.SymbolTable
 }
 
-func newSolution( nbWires int, hintFunctions map[hint.ID]hint.Function, hintsDependencies map[hint.ID]string, mHints map[int]*constraint.Hint,  coefficients []fr.Element, st *debug.SymbolTable) (solution, error) {
+func newSolution(nbWires int, hintFunctions map[hint.ID]hint.Function, hintsDependencies map[hint.ID]string, mHints map[int]*constraint.Hint, coefficients []fr.Element, st *debug.SymbolTable, injectors map[string]VariableInjector) (solution, error) {
 
 	s := solution{
 			st: st, 
@@ -32,6 +34,7 @@ func newSolution( nbWires int, hintFunctions map[hint.ID]hint.Function, hintsDep
 			solved: make([]bool, nbWires),
 			mHintsFunctions: hintFunctions,
 			mHints: mHints,
+			injectors: injectors,
 	}
 
 	// hintsDependencies is from compile time; it contains the list of hints the solver **needs**
@@ -119,6 +122,23 @@ func (s *solution) accumulateInto(t constraint.Term, r *fr.Element) {
 	}
 }
 
+// solveWithFunction unifies solveWithHint and solveWithInjector
+// if it is not a hint/injection solvable variable the result will be false
+func (s *solution) attemptSolveWithFunction(vID int) (bool, error) {
+	if hnt, ok := s.mHints[vID]; ok {
+		if err := s.solveWithHint(vID, hnt); err != nil {
+			return true, err
+		}
+	}
+	if v, ok := s.mInjected[vID]; ok {
+		if err := s.solveWithInjector(v); err != nil {
+			return true, err
+		}
+	}
+
+	return false, nil
+}
+
 // solveHint compute solution.values[vID] using provided solver hint
 func (s *solution) solveWithHint(vID int, h *constraint.Hint) error {
 	// skip if the wire is already solved by a call to the same hint
@@ -157,13 +177,12 @@ func (s *solution) solveWithHint(vID int, h *constraint.Hint) error {
 			return nil
 		}
 		// unsolved dependency
-		if h, ok := s.mHints[wID]; ok {
-			// solve recursively.
-			return s.solveWithHint(wID, h)
+		if attempted, err := s.attemptSolveWithFunction(vID); attempted {
+			return err
+		} else {
+			// it's not a hint, we panic.
+			panic("solver can't compute hint; one or more input wires are unsolved")
 		}
-
-		// it's not a hint, we panic.
-		panic("solver can't compute hint; one or more input wires are unsolved")
 	}
 
 	for i := 0; i < nbInputs; i++ {
@@ -189,6 +208,56 @@ func (s *solution) solveWithHint(vID int, h *constraint.Hint) error {
 	}
 
 	return err 
+}
+
+// solveWithInjector compute solution.values[vID] using provided variable injector
+func (s *solution) solveWithInjector(v constraint.InjectedVariable) error {
+	// skip if the wire is already solved by a call to the same hint
+	// function on the same inputs
+	if s.solved[v.Wire] {
+		return nil
+	}
+
+	f := s.injectors[v.ID]
+
+	// for each input, we set its value, IF all the wires are solved
+	// the only case where all wires may not be solved, is if one of the input of this injector
+	// is the output of a hint or another injector.
+	// it is safe to recursively solve this with the parallel solver, since all hints-output wires
+	// that we can solve this way are marked to be solved with the current constraint we are processing.
+	recursiveSolve := func(t constraint.Term) error {
+		if t.IsConstant() {
+			return nil
+		}
+		wID := t.WireID()
+		if s.solved[wID] {
+			return nil
+		}
+		// unsolved dependency
+		if attempted, err := s.attemptSolveWithFunction(v.Wire); attempted {
+			return err
+		}
+		// it's not a hint, we panic.
+		panic("solver can't compute hint; one or more input wires are unsolved")
+	}
+
+	inputs := make([]fr.Element, len(v.Inputs))
+	for i := range inputs {
+		for _, term := range v.Inputs[i] {
+			if err := recursiveSolve(term); err != nil {
+				return err
+			}
+			s.accumulateInto(term, &inputs[i])
+		}
+	}
+
+	out, err := f(inputs)
+	if err != nil {
+		return err
+	}
+	s.set(v.Wire, out)
+
+	return nil
 }
 
 func (s *solution) printLogs(log zerolog.Logger, logs []constraint.LogEntry) {
