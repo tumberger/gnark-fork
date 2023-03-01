@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/fxamacker/cbor/v2"
 	"io"
+	"reflect"
 	"runtime"
 	"sync"
 	"time"
@@ -450,4 +451,20 @@ func (cs *R1CS) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	return int64(decoder.NumBytesRead()), nil
+}
+
+func (cs *R1CS) DeepEqual(ccs constraint.ConstraintSystem) bool { //TODO: Remove
+	o := ccs.(*R1CS)
+	if !reflect.DeepEqual(cs.R1CSCore, o.R1CSCore) {
+		fmt.Println("it's in the core")
+		sys, oSys := cs.R1CSCore.System, o.R1CSCore.System
+		if !reflect.DeepEqual(sys, oSys) {
+			fmt.Println("it's inherent in the system")
+			sys.DeepEqual(oSys)
+		}
+	}
+
+	//CoeffTable
+	//arithEngine
+	return false
 }

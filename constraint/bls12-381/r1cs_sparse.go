@@ -460,3 +460,7 @@ func (cs *SparseR1CS) ReadFrom(r io.Reader) (int64, error) {
 
 	return int64(decoder.NumBytesRead()), nil
 }
+
+func (cs *SparseR1CS) DeepEqual(ccs constraint.ConstraintSystem) bool { //TODO: Remove
+	return false
+}

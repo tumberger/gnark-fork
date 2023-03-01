@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"reflect"
 
 	"github.com/blang/semver/v4"
 	"github.com/consensys/gnark"
@@ -69,6 +70,7 @@ type ConstraintSystem interface {
 	// CheckUnconstrainedWires returns and error if the constraint system has wires that are not uniquely constrained.
 	// This is experimental.
 	CheckUnconstrainedWires() error
+	DeepEqual(ccs ConstraintSystem) bool //TODO: Remove
 }
 
 type Iterable interface {
@@ -314,4 +316,90 @@ func (system *System) InjectedVariablesIndexes() []int {
 		res[i] = system.InjectedVariables[i].Wire
 	}
 	return res
+}
+
+func (system *System) DeepEqual(o System) {
+	if !reflect.DeepEqual(system.GnarkVersion, o.GnarkVersion) {
+		panic("GnarkVersion")
+	}
+
+	if !reflect.DeepEqual(system.ScalarField, o.ScalarField) {
+		panic("ScalarField")
+	}
+
+	if !reflect.DeepEqual(system.NbInternalVariables, o.NbInternalVariables) {
+		panic("NbInternalVariables")
+	}
+
+	if !reflect.DeepEqual(system.Public, o.Public) {
+		panic("Public")
+	}
+
+	if !reflect.DeepEqual(system.Secret, o.Secret) {
+		panic("Secret")
+	}
+
+	if !reflect.DeepEqual(system.Logs, o.Logs) {
+		panic("Logs")
+	}
+
+	if !reflect.DeepEqual(system.DebugInfo, o.DebugInfo) {
+		panic("DebugInfo")
+	}
+
+	if !reflect.DeepEqual(system.SymbolTable, o.SymbolTable) {
+		panic("SymbolTable")
+	}
+
+	if !reflect.DeepEqual(system.MDebug, o.MDebug) {
+		panic("MDebug")
+	}
+
+	if !reflect.DeepEqual(system.MHints, o.MHints) {
+		panic("MHints")
+	}
+
+	if !reflect.DeepEqual(system.MHintsDependencies, o.MHintsDependencies) {
+		panic("MHintsDependencies")
+	}
+
+	if !reflect.DeepEqual(system.InjectedVariables, o.InjectedVariables) {
+		panic("InjectedVariables")
+	}
+
+	if !reflect.DeepEqual(system.MInjectedVariables, o.MInjectedVariables) {
+		panic("MInjectedVariables")
+	}
+
+	if !reflect.DeepEqual(system.Levels, o.Levels) {
+		panic("Levels")
+	}
+
+	if !reflect.DeepEqual(system.q, o.q) {
+		panic("q")
+	}
+
+	if !reflect.DeepEqual(system.bitLen, o.bitLen) {
+		panic("bitLen")
+	}
+
+	if !reflect.DeepEqual(system.lbWireLevel, o.lbWireLevel) {
+		panic("lbWireLevel")
+	}
+
+	if !reflect.DeepEqual(system.lbOutputs, o.lbOutputs) {
+		panic("lbOutputs")
+	}
+
+	if !reflect.DeepEqual(system.lbHints, o.lbHints) {
+		panic("lbHints")
+	}
+
+	if !reflect.DeepEqual(system.lbInjected, o.lbInjected) {
+		panic("lbInjected")
+	}
+
+	if !reflect.DeepEqual(system.CommitmentInfo, o.CommitmentInfo) {
+		panic("CommitmentInfo")
+	}
 }
