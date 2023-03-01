@@ -17,13 +17,82 @@
 package groth16
 
 import (
+	"errors"
 	curve "github.com/consensys/gnark-crypto/ecc/bw6-633"
 	"github.com/consensys/gnark-crypto/ecc/bw6-633/fr"
 	"github.com/consensys/gnark/constraint"
-	"math/big"
+	cs "github.com/consensys/gnark/constraint/bn254"
 )
 
-func solveCommitmentWire(commitmentInfo *constraint.Commitment, commitment *curve.G1Affine, publicCommitted []*big.Int) (fr.Element, error) {
-	res, err := fr.Hash(commitmentInfo.SerializeCommitment(commitment.Marshal(), publicCommitted, (fr.Bits-1)/8+1), []byte(constraint.CommitmentDst), 1)
+// TODO: Move to gnark-crypto or replace with generics
+// partition the vector v based on the ORDER of elements in the given ordered lists
+// in the current use-case len(order) = 2. if it gets large perhaps heaps would be necessary
+func partition(v fr.Vector, order ...[]int) []fr.Vector {
+	r := make([]fr.Vector, len(order))
+	heads := make([]int, len(order))
+	for i := range v {
+		min := -1 >> 1 //max int
+		var minI int
+
+		for j := range order {
+			if heads[j] < len(order[j]) && heads[j] <= min {
+				min = heads[j]
+				minI = j
+				heads[j]++
+			}
+		}
+
+		r[minI] = append(r[minI], v[i])
+	}
+
+	return r
+}
+
+func filter(v fr.Vector, pass []int) fr.Vector {
+	res := make(fr.Vector, len(pass))
+	for i := range pass {
+		res[i] = v[pass[i]]
+	}
+	return res
+}
+
+func commitmentProverInjector(r1cs *cs.R1CS, pk *ProvingKey, proof *Proof) cs.VariableInjector {
+	return func(in []fr.Element) (res fr.Element, err error) {
+		if len(in) != r1cs.CommitmentInfo.NbCommitted() { // TODO: Remove
+			err = errors.New("unexpected number of committed variables")
+			return
+		}
+		inPartitioned := partition(in, r1cs.CommitmentInfo.PrivateCommitted, r1cs.CommitmentInfo.PublicCommitted)
+		inPrivate := inPartitioned[0]
+		inPublic := inPartitioned[1]
+
+		proof.Commitment, proof.CommitmentPok, err = pk.CommitmentKey.Commit(inPrivate)
+		if err != nil {
+			return
+		}
+		return solveCommitmentWire(&proof.Commitment, inPublic)
+	}
+}
+
+func commitmentVerifierInjector(publicWitness fr.Vector, vk *VerifyingKey, proof *Proof) (res fr.Element, err error) {
+	if err = vk.CommitmentKey.VerifyKnowledgeProof(proof.Commitment, proof.CommitmentPok); err != nil {
+		return
+	}
+
+	publicCommitted := filter(publicWitness, vk.PublicCommitted)
+
+	return solveCommitmentWire(&proof.Commitment, publicCommitted)
+}
+
+func solveCommitmentWire(commitment *curve.G1Affine, publicCommitted []fr.Element) (fr.Element, error) {
+	commSerialized := commitment.Marshal()
+	serialized := make([]byte, len(commSerialized)+len(publicCommitted)*fr.Bytes)
+	copy(serialized, commSerialized)
+	offset := len(commSerialized)
+	for i := range publicCommitted {
+		end := offset + fr.Bytes
+		copy(serialized[offset:end], publicCommitted[i].Marshal())
+	}
+	res, err := fr.Hash(serialized, []byte(constraint.CommitmentDst), 1)
 	return res[0], err
 }
