@@ -188,7 +188,7 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, witness fr.Vector, opt backend.ProverC
 			chKrs2Done <- err
 		}()
 
-		// filterOut the wire values if needed;
+		// filter the wire values if needed;
 		_wireValues := filterOut(wireValues, r1cs.CommitmentInfo.PrivateCommitted, r1cs.InjectedVariablesIndexes())
 
 		if _, err := krs.MultiExp(pk.G1.K, _wireValues[r1cs.GetNbPublicVariables():], ecc.MultiExpConfig{NbTasks: n / 2}); err != nil {
@@ -276,31 +276,31 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, witness fr.Vector, opt backend.ProverC
 // this assumes toRemove indexes are sorted and len(slice) > len(toRemove)
 func filterOut(slice []fr.Element, toRemove ...[]int) (r []fr.Element) {
 
-	if len(toRemove) == 0 {
-		return slice
-	}
-
 	resSize := len(slice)
 	for _, toRemoveI := range toRemove {
 		resSize -= len(toRemoveI)
 	}
 
-	r = make([]fr.Element, 0, resSize)
+	if len(resSize) == len(slice) {
+		return slice
+	}
 
+	r = make([]fr.Element, 0, resSize)
 	heads := make([]int, len(toRemove))
 	// note: we can optimize that for the likely case where len(slice) >>> len(toRemove)
 	for i := 0; i < len(slice); i++ {
-
+		keep := true
 		for j := range heads {
 			if heads[j] < len(toRemove[j]) && i == toRemove[j][heads[j]] {
 				heads[j]++
-				continue
+				keep = false
+				break
 			}
 		}
-
-		r = append(r, slice[i])
+		if keep {
+			r = append(r, slice[i])
+		}
 	}
-
 	return r
 }
 

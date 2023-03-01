@@ -1,5 +1,4 @@
 import (
-	"fmt"
 	{{- template "import_fr" . }}
 	{{- template "import_curve" . }}
 	{{- template "import_backend_cs" . }}
@@ -33,6 +32,12 @@ func (proof *Proof) CurveID() ecc.ID {
 	return curve.ID
 }
 
+func proverInjectors(r1cs *cs.R1CS, pk *ProvingKey, proof *Proof) map[string]cs.VariableInjector {
+	return map[string]cs.VariableInjector{
+		"bsb22": commitmentProverInjector(r1cs, pk, proof),
+	}
+}
+
 // Prove generates the proof of knowledge of a r1cs with full witness (secret + public part).
 func Prove(r1cs *cs.R1CS, pk *ProvingKey, witness fr.Vector, opt backend.ProverConfig) (*Proof, error) {
 	// TODO @gbotrel witness size check is done by R1CS, doesn't mean we shouldn't sanitize here.
@@ -48,36 +53,11 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, witness fr.Vector, opt backend.ProverC
 	c := make([]fr.Element, len(r1cs.Constraints), pk.Domain.Cardinality)
 
 	proof := &Proof{}
-	if r1cs.CommitmentInfo.Is() {
-		opt.HintFunctions[r1cs.CommitmentInfo.HintID] = func(_ *big.Int, in []*big.Int, out []*big.Int) error {
-			// Perf-TODO: Converting these values to big.Int and back may be a performance bottleneck.
-			// If that is the case, figure out a way to feed the solution vector into this function
-			if len(in) != r1cs.CommitmentInfo.NbCommitted() { // TODO: Remove
-				return fmt.Errorf("unexpected number of committed variables")
-			}
-			values := make([]fr.Element, r1cs.CommitmentInfo.NbPrivateCommitted)
-			nbPublicCommitted := len(in) - len(values)
-			inPrivate := in[nbPublicCommitted:]
-			for i, inI := range inPrivate {
-				values[i].SetBigInt(inI)
-			}
-
-			var err error
-			proof.Commitment, proof.CommitmentPok, err = pk.CommitmentKey.Commit(values)
-			if err != nil {
-				return err
-			}
-
-			var res fr.Element
-			res, err = solveCommitmentWire(&r1cs.CommitmentInfo, &proof.Commitment, in[:r1cs.CommitmentInfo.NbPublicCommitted()])
-			res.BigInt(out[0]) //Perf-TODO: Regular (non-mont) hashToField to obviate this conversion?
-			return err
-		}
-	}
+	injectors := proverInjectors(r1cs, pk, proof)
 
 	var wireValues []fr.Element
-	var err error 
-	if wireValues, err = r1cs.Solve(witness, a, b, c, opt); err != nil {
+	var err error
+	if wireValues, err = r1cs.Solve(witness, a, b, c, injectors, opt); err != nil {
 		if !opt.Force {
 			return nil, err
 		} else {
@@ -192,7 +172,7 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, witness fr.Vector, opt backend.ProverC
 		}()
 
 		// filter the wire values if needed;
-		_wireValues := filter(wireValues, r1cs.CommitmentInfo.PrivateToPublic())
+		_wireValues := filterOut(wireValues, r1cs.CommitmentInfo.PrivateCommitted, r1cs.InjectedVariablesIndexes())
 
 		if _, err := krs.MultiExp(pk.G1.K, _wireValues[r1cs.GetNbPublicVariables():], ecc.MultiExpConfig{NbTasks:n/2}); err != nil {
 			chKrsDone <- err
@@ -277,23 +257,33 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, witness fr.Vector, opt backend.ProverC
 // if len(toRemove) == 0, returns slice
 // else, returns a new slice without the indexes in toRemove
 // this assumes toRemove indexes are sorted and len(slice) > len(toRemove)
-func filter(slice []fr.Element, toRemove []int) (r []fr.Element) {
+func filterOut(slice []fr.Element, toRemove ...[]int) (r []fr.Element) {
 
-	if len(toRemove) == 0 {
+	resSize := len(slice)
+	for _, toRemoveI := range toRemove {
+		resSize -= len(toRemoveI)
+	}
+
+	if len(resSize) == len(slice) {
 		return slice
 	}
-	r = make([]fr.Element, 0, len(slice)-len(toRemove))
 
-	j := 0
+	r = make([]fr.Element, 0, resSize)
+	heads := make([]int, len(toRemove))
 	// note: we can optimize that for the likely case where len(slice) >>> len(toRemove)
-	for i:=0; i < len(slice);i++ {
-		if j < len(toRemove) && i == toRemove[j] {
-			j++
-			continue 
+	for i := 0; i < len(slice); i++ {
+		keep := true
+		for j := range heads {
+			if heads[j] < len(toRemove[j]) && i == toRemove[j][heads[j]] {
+				heads[j]++
+				keep = false
+				break
+			}
 		}
-		r = append(r, slice[i])
+		if keep {
+			r = append(r, slice[i])
+		}
 	}
-
 	return r
 }
 
@@ -327,7 +317,7 @@ func computeH(a, b, c []fr.Element, domain *fft.Domain) []fr.Element {
 	den.Sub(&den, &one).Inverse(&den)
 
 	// h = ifft_coset(ca o cb - cc)
-	// reusing a to avoid unecessary memalloc
+	// reusing a to avoid unnecessary memalloc
 	utils.Parallelize(n, func(start, end int) {
 		for i := start; i < end; i++ {
 			a[i].Mul(&a[i], &b[i]).
