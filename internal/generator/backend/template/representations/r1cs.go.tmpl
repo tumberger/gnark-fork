@@ -56,25 +56,25 @@ func (cs *R1CS) AddConstraint(r1c constraint.R1C, debugInfo ...constraint.DebugI
 	return cID
 }
 
-
+type VariableInjector func([]fr.Element) (fr.Element, error)
 
 // Solve sets all the wires and returns the a, b, c vectors.
 // the cs system should have been compiled before. The entries in a, b, c are in Montgomery form.
 // a, b, c vectors: ab-c = hz
 // witness = [publicWires | secretWires] (without the ONE_WIRE !)
 // returns  [publicWires | secretWires | internalWires ]
-func (cs *R1CS) Solve(witness, a, b, c fr.Vector, opt backend.ProverConfig) (fr.Vector, error) {
+func (cs *R1CS) Solve(witness, a, b, c fr.Vector, injectors map[string]VariableInjector, opt backend.ProverConfig) (fr.Vector, error) {
 	log := logger.Logger().With().Int("nbConstraints", len(cs.Constraints)).Str("backend", "groth16").Logger()
 
 	nbWires := len(cs.Public) + len(cs.Secret) + cs.NbInternalVariables
-	solution, err := newSolution(nbWires, opt.HintFunctions, cs.MHintsDependencies, cs.MHints, cs.Coefficients, &cs.System.SymbolTable)
+	solution, err := newSolution(nbWires, opt.HintFunctions, cs.MHintsDependencies, cs.MHints, cs.Coefficients, &cs.System.SymbolTable, injectors)
 	if err != nil {
 		return make(fr.Vector, nbWires), err
 	}
 	start := time.Now()
 
 	if len(witness) != len(cs.Public)-1+len(cs.Secret) { // - 1 for ONE_WIRE
-		err = fmt.Errorf("invalid witness size, got %d, expected %d = %d (public) + %d (secret)", len(witness), int(len(cs.Public)-1+len(cs.Secret)), len(cs.Public)-1, len(cs.Secret))
+		err = fmt.Errorf("invalid witness size, got %d, expected %d = %d (public) + %d (secret)", len(witness), len(cs.Public)-1+len(cs.Secret), len(cs.Public)-1, len(cs.Secret))
 		log.Err(err).Send()
 		return solution.values, err 
 	}
@@ -251,7 +251,7 @@ func (cs *R1CS) IsSolved(witness witness.Witness, opts ...backend.ProverOption) 
 	b := make(fr.Vector, len(cs.Constraints))
 	c := make(fr.Vector, len(cs.Constraints))
 	v := witness.Vector().(fr.Vector)
-	_, err = cs.Solve(v, a, b, c, opt)
+	_, err = cs.Solve(v, a, b, c, nil, opt)
 	return err
 }
 
@@ -300,8 +300,8 @@ func (cs *R1CS) solveConstraint(r constraint.R1C, solution *solution, a,b,c *fr.
 			}
 
 			// first we check if this is a hint wire
-			if hint, ok := cs.MHints[vID]; ok {
-				if err := solution.solveWithHint(vID, hint); err != nil {
+			if attempted, err := solution.attemptSolveWithFunction(vID); attempted {
+				if err != nil {
 					return err
 				}
 				// now that the wire is saved, accumulate it into a, b or c
