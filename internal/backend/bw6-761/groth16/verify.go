@@ -24,7 +24,6 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bw6-761/fr"
 	"github.com/consensys/gnark/logger"
 	"io"
-	"math/big"
 	"time"
 )
 
@@ -36,11 +35,7 @@ var (
 // Verify verifies a proof with given VerifyingKey and publicWitness
 func Verify(proof *Proof, vk *VerifyingKey, publicWitness fr.Vector) error {
 
-	nbPublicVars := len(vk.G1.K)
-	if vk.CommitmentInfo.Is() {
-		nbPublicVars--
-	}
-	if len(publicWitness) != nbPublicVars-1 {
+	if len(publicWitness)+len(vk.InjectedVariables) != len(vk.G1.K) {
 		return fmt.Errorf("invalid witness size, got %d, expected %d (public - ONE_WIRE)", len(publicWitness), len(vk.G1.K)-1)
 	}
 	log := logger.Logger().With().Str("curve", vk.CurveID().String()).Str("backend", "groth16").Logger()
@@ -62,21 +57,21 @@ func Verify(proof *Proof, vk *VerifyingKey, publicWitness fr.Vector) error {
 		close(chDone)
 	}()
 
-	if vk.CommitmentInfo.Is() {
+	injectors := map[string]func(fr.Vector, *VerifyingKey, *Proof) (fr.Element, error){
+		"bsb22": commitmentVerifierInjector,
+	}
 
-		if err := vk.CommitmentKey.VerifyKnowledgeProof(proof.Commitment, proof.CommitmentPok); err != nil {
+	hasCommitment := false
+	for _, vI := range vk.InjectedVariables {
+		if f, ok := injectors[vI.ID]; !ok {
+			return fmt.Errorf("injector \"%s\" not found", vI.ID)
+		} else if res, err := f(publicWitness, vk, proof); err != nil {
 			return err
-		}
-
-		publicCommitted := make([]*big.Int, vk.CommitmentInfo.NbPublicCommitted())
-		for i := range publicCommitted {
-			var b big.Int
-			publicWitness[vk.CommitmentInfo.Committed[i]-1].BigInt(&b)
-			publicCommitted[i] = &b
-		}
-
-		if res, err := solveCommitmentWire(&vk.CommitmentInfo, &proof.Commitment, publicCommitted); err == nil {
+		} else {
 			publicWitness = append(publicWitness, res)
+		}
+		if vi.ID == "bsb22" {
+			hasCommitment = true
 		}
 	}
 
@@ -86,8 +81,7 @@ func Verify(proof *Proof, vk *VerifyingKey, publicWitness fr.Vector) error {
 		return err
 	}
 	kSum.AddMixed(&vk.G1.K[0])
-
-	if vk.CommitmentInfo.Is() {
+	if hasCommitment {
 		kSum.AddMixed(&proof.Commitment)
 	}
 

@@ -36,8 +36,7 @@ var (
 // Verify verifies a proof with given VerifyingKey and publicWitness
 func Verify(proof *Proof, vk *VerifyingKey, publicWitness fr.Vector) error {
 
-	nbPublicVars := len(vk.G1.K)
-	if len(publicWitness)+len(vk.InjectedVariables) != nbPublicVars {
+	if len(publicWitness)+len(vk.InjectedVariables) != len(vk.G1.K) {
 		return fmt.Errorf("invalid witness size, got %d, expected %d (public - ONE_WIRE)", len(publicWitness), len(vk.G1.K)-1)
 	}
 	log := logger.Logger().With().Str("curve", vk.CurveID().String()).Str("backend", "groth16").Logger()
@@ -63,6 +62,7 @@ func Verify(proof *Proof, vk *VerifyingKey, publicWitness fr.Vector) error {
 		"bsb22": commitmentVerifierInjector,
 	}
 
+	hasCommitment := false
 	for _, vI := range vk.InjectedVariables {
 		if f, ok := injectors[vI.ID]; !ok {
 			return fmt.Errorf("injector \"%s\" not found", vI.ID)
@@ -70,6 +70,9 @@ func Verify(proof *Proof, vk *VerifyingKey, publicWitness fr.Vector) error {
 			return err
 		} else {
 			publicWitness = append(publicWitness, res)
+		}
+		if vi.ID == "bsb22" {
+			hasCommitment = true
 		}
 	}
 
@@ -79,8 +82,9 @@ func Verify(proof *Proof, vk *VerifyingKey, publicWitness fr.Vector) error {
 		return err
 	}
 	kSum.AddMixed(&vk.G1.K[0])
-
-	kSum.AddMixed(&proof.Commitment) // TODO: Special case for when Commitment is not set?
+	if hasCommitment {
+		kSum.AddMixed(&proof.Commitment)
+	}
 
 	var kSumAff curve.G1Affine
 	kSumAff.FromJacobian(&kSum)
