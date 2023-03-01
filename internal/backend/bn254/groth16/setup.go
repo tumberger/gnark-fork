@@ -75,8 +75,9 @@ type VerifyingKey struct {
 	// e(α, β)
 	e curve.GT // not serialized
 
-	CommitmentKey  pedersen.Key
-	CommitmentInfo constraint.Commitment // since the verifier doesn't input a constraint system, this needs to be provided here
+	CommitmentKey     pedersen.Key
+	InjectedVariables []constraint.InjectedVariable
+	PublicCommitted   []int
 }
 
 // Setup constructs the SRS
@@ -93,14 +94,10 @@ func Setup(r1cs *cs.R1CS, pk *ProvingKey, vk *VerifyingKey) error {
 
 	// get R1CS nb constraints, wires and public/private inputs
 	nbWires := r1cs.NbInternalVariables + r1cs.GetNbPublicVariables() + r1cs.GetNbSecretVariables()
-	nbPrivateCommittedWires := r1cs.CommitmentInfo.NbPrivateCommitted
-	nbPublicWires := r1cs.GetNbPublicVariables()
-	nbPrivateWires := r1cs.GetNbSecretVariables() + r1cs.NbInternalVariables - nbPrivateCommittedWires
-
-	if r1cs.CommitmentInfo.Is() { // the commitment itself is defined by a hint so the prover considers it private
-		nbPublicWires++  // but the verifier will need to inject the value itself so on the groth16
-		nbPrivateWires-- // level it must be considered public
-	}
+	nbPrivateCommittedWires := len(r1cs.CommitmentInfo.PrivateCommitted)
+	nbInjectedVars := len(r1cs.InjectedVariables)
+	nbPublicWires := r1cs.GetNbPublicVariables() + nbInjectedVars
+	nbPrivateWires := r1cs.GetNbSecretVariables() + r1cs.NbInternalVariables - nbPrivateCommittedWires - nbInjectedVars
 
 	// Setting group for fft
 	domain := fft.NewDomain(uint64(len(r1cs.Constraints)))
@@ -149,15 +146,16 @@ func Setup(r1cs *cs.R1CS, pk *ProvingKey, vk *VerifyingKey) error {
 			Mul(&t1, coeff)
 	}
 
-	vI, cI := 0, 0
-	privateCommitted := r1cs.CommitmentInfo.PrivateCommitted()
+	vI, cI, iI := 0, 0, 0
+	privateCommitted := r1cs.CommitmentInfo.PrivateCommitted
+	injected := r1cs.InjectedVariables
 
 	for i := range A {
 		isCommittedPrivate := cI < len(privateCommitted) && i == privateCommitted[cI]
-		isCommitment := r1cs.CommitmentInfo.Is() && i == r1cs.CommitmentInfo.CommitmentIndex
+		isInjected := iI < len(injected) && i == injected[iI].Wire
 		isPublic := i < r1cs.GetNbPublicVariables()
 
-		if isPublic || isCommittedPrivate || isCommitment {
+		if isPublic || isCommittedPrivate || isInjected {
 			computeK(i, &toxicWaste.gammaInv)
 
 			if isCommittedPrivate {
@@ -166,6 +164,9 @@ func Setup(r1cs *cs.R1CS, pk *ProvingKey, vk *VerifyingKey) error {
 			} else {
 				vkK[vI] = t1
 				vI++
+				if isInjected {
+					iI++
+				}
 			}
 		} else {
 			computeK(i, &toxicWaste.deltaInv)
@@ -262,7 +263,8 @@ func Setup(r1cs *cs.R1CS, pk *ProvingKey, vk *VerifyingKey) error {
 		pk.CommitmentKey = vk.CommitmentKey
 	}
 
-	vk.CommitmentInfo = r1cs.CommitmentInfo // unfortunate but necessary
+	vk.InjectedVariables = r1cs.InjectedVariables // unfortunate but necessary
+	vk.PublicCommitted = r1cs.CommitmentInfo.PublicCommitted
 
 	// ---------------------------------------------------------------------------------------------
 	// G2 scalars

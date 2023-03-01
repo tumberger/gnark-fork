@@ -48,6 +48,9 @@ type ConstraintSystem interface {
 	// using a call to output := f(input...) at solve time.
 	AddSolverHint(f hint.Function, input []LinearExpression, nbOutput int) (internalVariables []int, err error)
 
+	NewInjectedVariable(name string, input []LinearExpression) (variable int)
+	InjectedVariablesIndexes() []int
+
 	AddCommitment(c Commitment) error
 
 	AddLog(l LogEntry)
@@ -107,6 +110,8 @@ type System struct {
 
 	MHints             map[int]*Hint      // maps wireID to hint
 	MHintsDependencies map[hint.ID]string // maps hintID to hint string identifier
+	InjectedVariables  []InjectedVariable
+	MInjectedVariables map[uint32]InjectedVariable
 
 	// each level contains independent constraints and can be parallelized
 	// it is guaranteed that all dependencies for constraints in a level l are solved
@@ -124,6 +129,7 @@ type System struct {
 	lbWireLevel []int              `cbor:"-"` // at which level we solve a wire. init at -1.
 	lbOutputs   []uint32           `cbor:"-"` // wire outputs for current constraint.
 	lbHints     map[*Hint]struct{} `cbor:"-"` // hints we processed in current round
+	lbInjected  map[uint32]struct{}
 
 	CommitmentInfo Commitment
 }
@@ -140,6 +146,7 @@ func NewSystem(scalarField *big.Int) System {
 		q:                  new(big.Int).Set(scalarField),
 		bitLen:             scalarField.BitLen(),
 		lbHints:            map[*Hint]struct{}{},
+		lbInjected:         map[uint32]struct{}{},
 	}
 }
 
@@ -249,6 +256,19 @@ func (system *System) AddSolverHint(f hint.Function, input []LinearExpression, n
 	return
 }
 
+func (system *System) NewInjectedVariable(name string, input []LinearExpression) (variable int) {
+	// injected variables are in fact public, but pose as internal vars.
+	// The reason they can't be simply public is the assumption in Groth16 that all public vars are all bundled together with small indices
+	// i.e. we assume that the number of public vars is known after schema parsing, even before compiling the circuit
+	variable = system.AddInternalVariable()
+	system.InjectedVariables = append(system.InjectedVariables, InjectedVariable{
+		ID:     name,
+		Inputs: input,
+		Wire:   variable,
+	})
+	return
+}
+
 func (system *System) AddCommitment(c Commitment) error {
 	if system.CommitmentInfo.Is() {
 		return fmt.Errorf("currently only one commitment per circuit is supported")
@@ -285,4 +305,13 @@ func (system *System) VariableToString(vID int) string {
 	}
 	vID -= nbSecret
 	return fmt.Sprintf("v%d", vID) // TODO @gbotrel  vs strconv.Itoa.
+}
+
+// TODO: A algo.Map type call would probably be harmless here. Remove this once that is available
+func (system *System) InjectedVariablesIndexes() []int {
+	res := make([]int, len(system.InjectedVariables))
+	for i := range system.InjectedVariables {
+		res[i] = system.InjectedVariables[i].Wire
+	}
+	return res
 }

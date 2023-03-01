@@ -12,3 +12,10 @@ type Hint struct {
 	Inputs []LinearExpression // terms to inject in the hint function
 	Wires  []int              // IDs of wires the hint outputs map to
 }
+
+// TODO @Tabaie Take elsewhere or rename file
+type InjectedVariable struct {
+	ID     string // TODO "ID" for consistency with Hint or a more descriptive "Name"?
+	Inputs []LinearExpression
+	Wire   int
+}

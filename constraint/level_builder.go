@@ -11,6 +11,7 @@ package constraint
 func (system *System) updateLevel(cID int, c Iterable) {
 	system.lbOutputs = system.lbOutputs[:0]
 	system.lbHints = map[*Hint]struct{}{}
+	system.lbInjected = map[uint32]struct{}{}
 	level := -1
 	wireIterator := c.WireIterator()
 	for wID := wireIterator(); wID != -1; wID = wireIterator() {
@@ -39,9 +40,13 @@ func (system *System) updateLevel(cID int, c Iterable) {
 }
 
 func (system *System) processWire(wireID uint32, maxLevel *int) {
-	if wireID < uint32(system.GetNbPublicVariables()+system.GetNbSecretVariables()) {
+
+	injected, isInjected := system.MInjectedVariables[wireID]
+
+	if wireID < uint32(system.GetNbPublicVariables()+system.GetNbSecretVariables()) && !isInjected {
 		return // ignore inputs
 	}
+
 	for int(wireID) >= len(system.lbWireLevel) {
 		// we didn't encounter this wire yet, we need to grow b.wireLevels
 		system.lbWireLevel = append(system.lbWireLevel, -1)
@@ -77,6 +82,21 @@ func (system *System) processWire(wireID uint32, maxLevel *int) {
 		}
 
 		return
+	}
+
+	if isInjected {
+		if _, ok := system.lbInjected[wireID]; ok {
+			return
+		}
+		system.lbInjected[wireID] = struct{}{}
+		system.lbOutputs = append(system.lbOutputs, wireID)
+		for _, in := range injected.Inputs {
+			for _, t := range in {
+				if !t.IsConstant() {
+					system.processWire(t.VID, maxLevel)
+				}
+			}
+		}
 	}
 
 	// it's the missing wire

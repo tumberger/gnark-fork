@@ -19,7 +19,6 @@ package r1cs
 import (
 	"errors"
 	"fmt"
-	"math/big"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -722,22 +721,13 @@ func (builder *builder) Commit(v ...frontend.Variable) (frontend.Variable, error
 	}
 
 	// build commitment
-	commitment := constraint.NewCommitment(committed, nbPublicCommitted)
+	commitment := constraint.NewCommitment(committed, builder.cs.GetNbPublicVariables(), builder.cs.InjectedVariablesIndexes())
 
 	// hint is used at solving time to compute the actual value of the commitment
 	// it is going to be dynamically replaced at solving time.
-	hintOut, err := builder.NewHint(bsb22CommitmentComputePlaceholder, 1, builder.getCommittedVariables(&commitment)...)
-	if err != nil {
-		return nil, err
-	}
-	cVar := hintOut[0]
-	commitment.HintID = hint.UUID(bsb22CommitmentComputePlaceholder) // TODO @gbotrel probably not needed
+	cVar := builder.cs.NewInjectedVariable("bsb22", builder.getCommittedVariables(&commitment))
 
-	commitment.CommitmentIndex = (cVar.(expr.LinearExpression))[0].WireID()
-
-	// TODO @Tabaie: Get rid of this field
-	commitment.CommittedAndCommitment = append(commitment.Committed, commitment.CommitmentIndex)
-	if commitment.CommitmentIndex <= commitment.Committed[len(commitment.Committed)-1] {
+	if cVar <= commitment.Committed[len(commitment.Committed)-1] {
 		return nil, fmt.Errorf("commitment variable index smaller than some committed variable indices")
 	}
 
@@ -745,17 +735,13 @@ func (builder *builder) Commit(v ...frontend.Variable) (frontend.Variable, error
 		return nil, err
 	}
 
-	return cVar, nil
+	return constraint.LinearExpression{constraint.Term{CID: constraint.CoeffIdOne, VID: uint32(cVar)}}, nil
 }
 
-func (builder *builder) getCommittedVariables(i *constraint.Commitment) []frontend.Variable {
-	res := make([]frontend.Variable, len(i.Committed))
+func (builder *builder) getCommittedVariables(i *constraint.Commitment) []constraint.LinearExpression {
+	res := make([]constraint.LinearExpression, len(i.Committed))
 	for j, wireIndex := range i.Committed {
-		res[j] = expr.NewLinearExpression(wireIndex, builder.tOne)
+		res[j] = constraint.LinearExpression{constraint.Term{VID: uint32(wireIndex), CID: constraint.CoeffIdOne}}
 	}
 	return res
-}
-
-func bsb22CommitmentComputePlaceholder(*big.Int, []*big.Int, []*big.Int) error {
-	return fmt.Errorf("placeholder function: to be replaced by commitment computation")
 }

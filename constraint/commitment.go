@@ -2,22 +2,36 @@ package constraint
 
 import (
 	"math/big"
-
-	"github.com/consensys/gnark/backend/hint"
 )
 
 const CommitmentDst = "bsb22-commitment"
 
 type Commitment struct {
-	Committed              []int // sorted list of id's of committed variables
-	NbPrivateCommitted     int
-	HintID                 hint.ID // TODO @gbotrel we probably don't need that here
-	CommitmentIndex        int
-	CommittedAndCommitment []int // sorted list of id's of committed variables AND the commitment itself
+	Committed        []int // sorted list of id's of committed variables
+	PrivateCommitted []int
+	PublicCommitted  []int
 }
 
-func (i *Commitment) NbPublicCommitted() int {
-	return i.NbCommitted() - i.NbPrivateCommitted
+func NewCommitment(committed []int, nbPublic int, injected []int) Commitment {
+	res := Commitment{
+		Committed:        committed,
+		PrivateCommitted: make([]int, 0),
+		PublicCommitted:  make([]int, 0),
+	}
+
+	iI := 0
+	for _, cI := range committed {
+		if cI < nbPublic {
+			res.PublicCommitted = append(res.PublicCommitted, cI)
+		} else if iI < len(injected) && injected[iI] == cI {
+			res.PublicCommitted = append(res.PublicCommitted, cI)
+			iI++
+		} else {
+			res.PrivateCommitted = append(res.PrivateCommitted, cI)
+		}
+	}
+
+	return res
 }
 
 func (i *Commitment) NbCommitted() int {
@@ -26,16 +40,6 @@ func (i *Commitment) NbCommitted() int {
 
 func (i *Commitment) Is() bool {
 	return len(i.Committed) != 0
-}
-
-// NewCommitment initialize a Commitment object
-//   - committed are the sorted wireID to commit to (without duplicate)
-//   - nbPublicCommited is the number of public inputs among the commited wireIDs
-func NewCommitment(committed []int, nbPublicCommitted int) Commitment {
-	return Commitment{
-		Committed:          committed,
-		NbPrivateCommitted: len(committed) - nbPublicCommitted,
-	}
 }
 
 func (i *Commitment) SerializeCommitment(privateCommitment []byte, publicCommitted []*big.Int, fieldByteLen int) []byte {
@@ -50,13 +54,4 @@ func (i *Commitment) SerializeCommitment(privateCommitment []byte, publicCommitt
 	}
 
 	return res
-}
-
-// PrivateToPublic returns indexes of variables which are private to the constraint system, but public to Groth16. That is, private committed variables and the commitment itself
-func (i *Commitment) PrivateToPublic() []int {
-	return i.CommittedAndCommitment[i.NbPublicCommitted():]
-}
-
-func (i *Commitment) PrivateCommitted() []int {
-	return i.Committed[i.NbPublicCommitted():]
 }

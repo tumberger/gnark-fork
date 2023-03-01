@@ -24,7 +24,6 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 	"github.com/consensys/gnark/logger"
 	"io"
-	"math/big"
 	"text/template"
 	"time"
 )
@@ -38,10 +37,7 @@ var (
 func Verify(proof *Proof, vk *VerifyingKey, publicWitness fr.Vector) error {
 
 	nbPublicVars := len(vk.G1.K)
-	if vk.CommitmentInfo.Is() {
-		nbPublicVars--
-	}
-	if len(publicWitness) != nbPublicVars-1 {
+	if len(publicWitness)+len(vk.InjectedVariables) != nbPublicVars {
 		return fmt.Errorf("invalid witness size, got %d, expected %d (public - ONE_WIRE)", len(publicWitness), len(vk.G1.K)-1)
 	}
 	log := logger.Logger().With().Str("curve", vk.CurveID().String()).Str("backend", "groth16").Logger()
@@ -63,20 +59,16 @@ func Verify(proof *Proof, vk *VerifyingKey, publicWitness fr.Vector) error {
 		close(chDone)
 	}()
 
-	if vk.CommitmentInfo.Is() {
+	injectors := map[string]func(fr.Vector, *VerifyingKey, *Proof) (fr.Element, error){
+		"bsb22": commitmentVerifierInjector,
+	}
 
-		if err := vk.CommitmentKey.VerifyKnowledgeProof(proof.Commitment, proof.CommitmentPok); err != nil {
+	for _, vI := range vk.InjectedVariables {
+		if f, ok := injectors[vI.ID]; !ok {
+			return fmt.Errorf("injector \"%s\" not found", vI.ID)
+		} else if res, err := f(publicWitness, vk, proof); err != nil {
 			return err
-		}
-
-		publicCommitted := make([]*big.Int, vk.CommitmentInfo.NbPublicCommitted())
-		for i := range publicCommitted {
-			var b big.Int
-			publicWitness[vk.CommitmentInfo.Committed[i]-1].BigInt(&b)
-			publicCommitted[i] = &b
-		}
-
-		if res, err := solveCommitmentWire(&vk.CommitmentInfo, &proof.Commitment, publicCommitted); err == nil {
+		} else {
 			publicWitness = append(publicWitness, res)
 		}
 	}
@@ -88,9 +80,7 @@ func Verify(proof *Proof, vk *VerifyingKey, publicWitness fr.Vector) error {
 	}
 	kSum.AddMixed(&vk.G1.K[0])
 
-	if vk.CommitmentInfo.Is() {
-		kSum.AddMixed(&proof.Commitment)
-	}
+	kSum.AddMixed(&proof.Commitment) // TODO: Special case for when Commitment is not set?
 
 	var kSumAff curve.G1Affine
 	kSumAff.FromJacobian(&kSum)
