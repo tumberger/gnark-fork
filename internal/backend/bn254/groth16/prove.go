@@ -281,7 +281,7 @@ func filterOut(slice []fr.Element, toRemove ...[]int) (r []fr.Element) {
 		resSize -= len(toRemoveI)
 	}
 
-	if len(resSize) == len(slice) {
+	if resSize == len(slice) {
 		return slice
 	}
 

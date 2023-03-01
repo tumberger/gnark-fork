@@ -3,7 +3,7 @@ import (
     {{- template "import_fr" . }}
     {{- template "import_curve" . }}
     "github.com/consensys/gnark/constraint"
-    cs "github.com/consensys/gnark/constraint/bn254"
+    {{- template "import_backend_cs" . }}
 )
 // TODO: Move to gnark-crypto or replace with generics
 // partition the vector v based on the ORDER of elements in the given ordered lists

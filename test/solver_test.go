@@ -145,7 +145,7 @@ func (p *permutter) solveR1CS() error {
 		p.b[i].SetZero()
 		p.c[i].SetZero()
 	}
-	_, err = p.r1cs.Solve(p.witness, p.a, p.b, p.c, opt)
+	_, err = p.r1cs.Solve(p.witness, p.a, p.b, p.c, nil, opt)
 	return err
 }
 

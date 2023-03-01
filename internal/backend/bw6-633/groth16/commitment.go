@@ -21,7 +21,7 @@ import (
 	curve "github.com/consensys/gnark-crypto/ecc/bw6-633"
 	"github.com/consensys/gnark-crypto/ecc/bw6-633/fr"
 	"github.com/consensys/gnark/constraint"
-	cs "github.com/consensys/gnark/constraint/bn254"
+	"github.com/consensys/gnark/constraint/bw6-633"
 )
 
 // TODO: Move to gnark-crypto or replace with generics
