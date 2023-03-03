@@ -12,6 +12,7 @@ type PlonkTrace struct {
 	L, R, O            *iop.Polynomial
 	Ql, Qr, Qm, Qo, Qk *iop.Polynomial
 	S1, S2, S3         *iop.Polynomial
+	S                  []int64
 }
 
 // buildPermutation builds the Permutation associated with a circuit.
@@ -131,6 +132,7 @@ func SetupWoCommit(spr *SparseR1CS, publicWitness witness.Witness) PlonkTrace {
 
 	// build permutation. Note: at this stage, the permutation takes in account the placeholders
 	s := buildPermutation(spr, size)
+	res.S = s
 
 	// set s1, s2, s3
 	res.S1, res.S2, res.S3 = computePermutationPolynomials(s, &domain)
