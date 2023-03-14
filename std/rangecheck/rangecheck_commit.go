@@ -10,6 +10,7 @@ import (
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/internal/frontendtype"
 	"github.com/consensys/gnark/internal/kvstore"
+	"github.com/consensys/gnark/std/commitments/native"
 	"github.com/consensys/gnark/std/math/bits"
 )
 
@@ -63,10 +64,6 @@ func (c *commitChecker) commit(api frontend.API) error {
 	if len(c.collected) == 0 {
 		return nil
 	}
-	committer, ok := api.(frontend.Committer)
-	if !ok {
-		panic("expected committer API")
-	}
 	baseLength := c.getOptimalBasewidth(api)
 	// decompose into smaller limbs
 	decomposed := make([]frontend.Variable, 0, len(c.collected))
@@ -97,30 +94,29 @@ func (c *commitChecker) commit(api frontend.API) error {
 		panic(fmt.Sprintf("count %v", err))
 	}
 	// compute the poly \pi (X - s_i)^{e_i}
-	commitment, err := committer.Commit(collected...)
-	if err != nil {
-		panic(fmt.Sprintf("commit %v", err))
-	}
 	logn := stdbits.Len(uint(len(decomposed)))
-	var lp frontend.Variable = 1
-	for i := 0; i < nbTable; i++ {
-		expbits := bits.ToBinary(api, exps[i], bits.WithNbDigits(logn))
-		var acc frontend.Variable = 1
-		tmp := api.Sub(commitment, i)
-		for j := 0; j < logn; j++ {
-			curr := api.Select(expbits[j], tmp, 1)
-			acc = api.Mul(acc, curr)
-			tmp = api.Mul(tmp, tmp)
+	native.WithCommitment(api, func(api frontend.API, commitment frontend.Variable) error {
+		var lp frontend.Variable = 1
+		for i := 0; i < nbTable; i++ {
+			expbits := bits.ToBinary(api, exps[i], bits.WithNbDigits(logn))
+			var acc frontend.Variable = 1
+			tmp := api.Sub(commitment, i)
+			for j := 0; j < logn; j++ {
+				curr := api.Select(expbits[j], tmp, 1)
+				acc = api.Mul(acc, curr)
+				tmp = api.Mul(tmp, tmp)
+			}
+			lp = api.Mul(lp, acc)
 		}
-		lp = api.Mul(lp, acc)
-	}
-	// compute the poly \pi (X - f_i)
-	var rp frontend.Variable = 1
-	for i := range decomposed {
-		val := api.Sub(commitment, decomposed[i])
-		rp = api.Mul(rp, val)
-	}
-	api.AssertIsEqual(lp, rp)
+		// compute the poly \pi (X - f_i)
+		var rp frontend.Variable = 1
+		for i := range decomposed {
+			val := api.Sub(commitment, decomposed[i])
+			rp = api.Mul(rp, val)
+		}
+		api.AssertIsEqual(lp, rp)
+		return nil
+	}, collected...)
 	return nil
 }
 
