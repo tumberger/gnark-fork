@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc"
-	"github.com/consensys/gnark-crypto/field/goldilocks"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/test"
@@ -42,7 +41,7 @@ func TestCheck(t *testing.T) {
 	}
 	witness := CheckCircuit{Vals: vals, bits: bits, base: base}
 	circuit := CheckCircuit{Vals: make([]frontend.Variable, len(vals)), bits: bits, base: base}
-	err = test.IsSolved(&circuit, &witness, goldilocks.Modulus())
+	err = test.IsSolved(&circuit, &witness, ecc.BN254.ScalarField())
 	assert.NoError(err)
 	ccs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit)
 	assert.NoError(err)
