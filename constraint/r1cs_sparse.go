@@ -58,6 +58,10 @@ func (cs *SparseR1CSCore) UpdateLevel(cID int, c Iterable) {
 	cs.updateLevel(cID, c)
 }
 
+func (cs *SparseR1CSCore) AssignToLazyVariable(lazy, active LinearExpression) {
+	panic("TODO")
+}
+
 func (system *SparseR1CSCore) CheckUnconstrainedWires() error {
 	// TODO @gbotrel add unit test for that.
 

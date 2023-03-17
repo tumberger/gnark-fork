@@ -48,6 +48,8 @@ type ConstraintSystem interface {
 	AddPublicVariable(name string) int
 	AddSecretVariable(name string) int
 	AddInternalVariable() int
+	AddLazyInternalVariable() int
+	AssignToLazyVariable(lazy, active LinearExpression)
 
 	// AddSolverHint adds a hint to the solver such that the output variables will be computed
 	// using a call to output := f(input...) at solve time.
@@ -120,16 +122,19 @@ type System struct {
 	// TODO @gbotrel these are currently updated after we add a constraint.
 	// but in case the object is built from a serialized representation
 	// we need to init the level builder lbWireLevel from the existing constraints.
-	Levels [][]int
+	Levels     [][]int
+	lazyLevels [][]int
 
 	// scalar field
 	q      *big.Int `cbor:"-"`
 	bitLen int      `cbor:"-"`
 
 	// level builder
-	lbWireLevel []int            `cbor:"-"` // at which level we solve a wire. init at -1.
-	lbOutputs   []uint32         `cbor:"-"` // wire outputs for current constraint.
-	lbHints     map[int]struct{} `cbor:"-"` // hints we processed in current round
+	lbActiveWireLevels map[int]int `cbor:"-"` // at which level we solve a wire. init at -1.
+	lbLazyWireLevels   map[int]int `cbor:"-"` // at which level we solve a lazy wire. init at 0 (new lazy wire)
+
+	lbOutputs []int            `cbor:"-"` // wire outputs for current constraint.
+	lbHints   map[int]struct{} `cbor:"-"` // hints we processed in current round
 
 	CommitmentInfo Commitment
 }
@@ -146,6 +151,8 @@ func NewSystem(scalarField *big.Int) System {
 		q:                  new(big.Int).Set(scalarField),
 		bitLen:             scalarField.BitLen(),
 		lbHints:            map[int]struct{}{},
+		lbActiveWireLevels: map[int]int{},
+		lbLazyWireLevels:   map[int]int{},
 	}
 }
 
@@ -209,6 +216,16 @@ func (system *System) FieldBitLen() int {
 func (system *System) AddInternalVariable() (idx int) {
 	idx = system.NbInternalVariables + system.GetNbPublicVariables() + system.GetNbSecretVariables()
 	system.NbInternalVariables++
+	return idx
+}
+
+// AddLazyInternalVariable creates an internal variable and marks it as not
+// solvable now. This ensures that the variables depending on this variable get
+// solved only after this variable has been solved.
+func (system *System) AddLazyInternalVariable() (idx int) {
+	idx = system.NbInternalVariables + system.GetNbPublicVariables() + system.GetNbSecretVariables()
+	system.NbInternalVariables++
+	system.lbLazyWireLevels[idx] = 0
 	return idx
 }
 

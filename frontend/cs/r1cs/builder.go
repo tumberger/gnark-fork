@@ -18,6 +18,7 @@ package r1cs
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"reflect"
 	"sort"
@@ -68,6 +69,9 @@ type builder struct {
 	// buffers used to do in place api.MAC
 	mbuf1 expr.LinearExpression
 	mbuf2 expr.LinearExpression
+
+	toCommit        []frontend.Variable
+	lazyCommitments []frontend.Variable
 }
 
 // initialCapacity has quite some impact on frontend performance, especially on large circuits size
@@ -123,6 +127,11 @@ func newBuilder(field *big.Int, config frontend.CompileConfig) *builder {
 // the wire's id to the number of wires, and returns it
 func (builder *builder) newInternalVariable() expr.LinearExpression {
 	idx := builder.cs.AddInternalVariable()
+	return expr.NewLinearExpression(idx, builder.tOne)
+}
+
+func (builder *builder) newInternalLazyVariable() expr.LinearExpression {
+	idx := builder.cs.AddLazyInternalVariable()
 	return expr.NewLinearExpression(idx, builder.tOne)
 }
 
@@ -456,4 +465,35 @@ func (builder *builder) Defer(cb func(frontend.API) error) {
 
 func (*builder) FrontendType() frontendtype.Type {
 	return frontendtype.R1CS
+}
+
+func (builder *builder) MultiCommit(vars ...frontend.Variable) frontend.Variable {
+	if (builder.toCommit == nil) != (builder.lazyCommitments == nil) {
+		panic("inconsistent lazy commitments state")
+	}
+	if builder.toCommit == nil {
+		builder.Defer(builder.constraintLazyCommitments)
+	}
+	builder.toCommit = append(builder.toCommit, vars...)
+	lazyCommit := builder.newInternalLazyVariable()
+	builder.lazyCommitments = append(builder.lazyCommitments, lazyCommit)
+
+	return lazyCommit
+}
+
+func (builder *builder) constraintLazyCommitments(_ frontend.API) error {
+	rootCommitment, err := builder.Commit(builder.toCommit...)
+	if err != nil {
+		return fmt.Errorf("root commitment: %w", err)
+	}
+	active := builder.getLinearExpression(rootCommitment)
+	lazy := builder.getLinearExpression(builder.lazyCommitments[0])
+	builder.cs.AssignToLazyVariable(lazy, active)
+	for i := 1; i < len(builder.lazyCommitments); i++ {
+		rootCommitment := builder.Mul(rootCommitment, rootCommitment)
+		active := builder.getLinearExpression(rootCommitment)
+		lazy := builder.getLinearExpression(builder.lazyCommitments[i])
+		builder.cs.AssignToLazyVariable(lazy, active)
+	}
+	return nil
 }

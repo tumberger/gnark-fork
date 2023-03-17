@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/consensys/gnark/logger"
+	"github.com/consensys/gnark/profile"
 )
 
 type R1CS interface {
@@ -50,6 +51,50 @@ func (r1cs *R1CSCore) GetNbConstraints() int {
 
 func (r1cs *R1CSCore) UpdateLevel(cID int, c Iterable) {
 	r1cs.updateLevel(cID, c)
+}
+
+func (r1cs *R1CSCore) AssignToLazyVariable(lazy, active LinearExpression) {
+
+	// validity checks. We set only lazy term to active terms, no linear combinations.
+	if len(lazy) != 1 {
+		panic("activating non-term")
+	}
+	if len(active) != 1 {
+		panic("assigning activated variable to non-term")
+	}
+	// we can only activate explicit lazy variables (lazy level = 0). We expect
+	// that we do not activate the dependent values as it could create gaps in
+	// the levels.
+	level, ok := r1cs.lbLazyWireLevels[lazy[0].WireID()]
+	if !ok {
+		panic("trying to activate non-lazy term")
+	}
+	if level != 0 {
+		panic("trying to activate dependendent lazy term")
+	}
+	// delete the variable from the lazy vars list.
+	delete(r1cs.lbLazyWireLevels, lazy[0].WireID())
+	// create a constraint which sets the lazy term equal to active term
+	profile.RecordConstraint()
+	r1c := R1C{
+		L: LinearExpression{Term{CID: CoeffIdOne, VID: 0}},
+		R: active,
+		O: lazy,
+	}
+	r1cs.Constraints = append(r1cs.Constraints, r1c)
+	cID := len(r1cs.Constraints) - 1
+	r1cs.updateLevel(cID, &r1c)
+
+	// final step. If there are no explicitly lazy variable left (lazy level
+	// 0), then we can move all the lazy constraints into active constraints
+	// with the corresponding shift.
+	for _, v := range r1cs.lbLazyWireLevels {
+		if v == 0 {
+			// there is lazy variable still left. Do not do anything
+			return
+		}
+	}
+	r1cs.Levels = append(r1cs.Levels, r1cs.lazyLevels...)
 }
 
 // IsValid perform post compilation checks on the Variables

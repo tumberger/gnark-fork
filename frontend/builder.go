@@ -79,6 +79,10 @@ type Committer interface {
 	Commit(toCommit ...Variable) (commitment Variable, err error)
 }
 
+type MultiCommitter interface {
+	MultiCommit(toCommit ...Variable) Variable
+}
+
 // Rangechecker allows to externally range-check the variables to be of
 // specified width. Not all compilers implement this interface. Users should
 // instead use [github.com/consensys/gnark/std/rangecheck] package which

@@ -53,6 +53,9 @@ type engine struct {
 	// mHintsFunctions map[hint.ID]hintFunction
 	constVars bool
 	kvstore.Store
+
+	toCommit        []frontend.Variable
+	lazyCommitments []frontend.Variable
 }
 
 // TestEngineOption defines an option for the test engine.
@@ -607,4 +610,9 @@ func (e *engine) Commit(v ...frontend.Variable) (frontend.Variable, error) {
 
 func (e *engine) Defer(cb func(frontend.API) error) {
 	circuitdefer.Put(e, cb)
+}
+
+func (e *engine) MultiCommit(vars ...frontend.Variable) frontend.Variable {
+	cmt, _ := e.Commit(vars...)
+	return cmt
 }
