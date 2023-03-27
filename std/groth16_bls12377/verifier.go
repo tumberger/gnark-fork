@@ -18,10 +18,16 @@ limitations under the License.
 package groth16_bls12377
 
 import (
+	// "go/build/constraint"
 	"reflect"
 
 	bls12377 "github.com/consensys/gnark-crypto/ecc/bls12-377"
+	"github.com/consensys/gnark-crypto/ecc/bls12-377/fr"
+	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/backend/groth16"
+	"github.com/consensys/gnark/backend/witness"
+	"github.com/consensys/gnark/constraint"
+	cs_bls12377 "github.com/consensys/gnark/constraint/bls12-377"
 	"github.com/consensys/gnark/frontend"
 	groth16_bls12377 "github.com/consensys/gnark/internal/backend/bls12-377/groth16"
 	"github.com/consensys/gnark/std/algebra/fields_bls12377"
@@ -103,4 +109,44 @@ func (vk *VerifyingKey) Assign(_ovk groth16.VerifyingKey) {
 	gammaNeg.Neg(&ovk.G2.Gamma)
 	vk.G2.DeltaNeg.Assign(&deltaNeg)
 	vk.G2.GammaNeg.Assign(&gammaNeg)
+}
+
+// Prepare the data for the inner proof.
+// Returns the public inputs string of the inner proof
+func GenerateBls12377InnerProof(_vk groth16.VerifyingKey, _proof groth16.Proof, w witness.Witness, r1cs constraint.ConstraintSystem) {
+	vk, vk_ok := _vk.(*groth16_bls12377.VerifyingKey)
+	if !vk_ok {
+		panic("expected *groth16_bls12377.VerifyingKey, got " + reflect.TypeOf(_vk).String())
+	}
+
+	proof, proof_ok := _proof.(*groth16_bls12377.Proof)
+	if !proof_ok {
+		panic("expected *groth16_bls12377.Proof, got " + reflect.TypeOf(_proof).String())
+	}
+
+	publicWitness, err := w.Public()
+	if err != nil {
+		panic("can't parse public witness")
+	}
+
+	// generate the data to return for the bls12377 proof
+	var pk groth16_bls12377.ProvingKey
+	err = groth16_bls12377.Setup(r1cs.(*cs_bls12377.R1CS), &pk, vk)
+	if err != nil {
+		panic("setup failed")
+	}
+
+	inner_proof, err := groth16_bls12377.Prove(r1cs.(*cs_bls12377.R1CS), &pk, w.Vector().(fr.Vector), backend.ProverConfig{})
+	if err != nil {
+		panic("proof failed")
+	}
+
+	proof.Ar = inner_proof.Ar
+	proof.Bs = inner_proof.Bs
+	proof.Krs = inner_proof.Krs
+
+	// before returning verifies that the proof passes on bls12377
+	if err := groth16_bls12377.Verify(proof, vk, publicWitness.Vector().(fr.Vector)); err != nil {
+		panic("verify failed")
+	}
 }
