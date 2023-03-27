@@ -29,9 +29,9 @@ import (
 	"github.com/consensys/gnark/constraint"
 	cs_bls12377 "github.com/consensys/gnark/constraint/bls12-377"
 	"github.com/consensys/gnark/frontend"
-	groth16_bls12377 "github.com/consensys/gnark/internal/backend/bls12-377/groth16"
 	"github.com/consensys/gnark/std/algebra/fields_bls12377"
 	"github.com/consensys/gnark/std/algebra/sw_bls12377"
+	groth16_bls12377 "github.com/consensys/gnark/internal/backend/bls12-377/groth16"
 )
 
 // Proof represents a Groth16 proof

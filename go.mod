@@ -1,4 +1,4 @@
-module github.com/tumberger/gnark-fork
+module github.com/consensys/gnark
 
 go 1.18
 
@@ -29,3 +29,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
+
+replace github.com/consensys/gnark => github.com/tumberger/gnark-fork v0.8.1-0.20230327090133-0c174ec96c41
