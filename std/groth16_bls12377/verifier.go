@@ -22,16 +22,11 @@ import (
 	"reflect"
 
 	bls12377 "github.com/consensys/gnark-crypto/ecc/bls12-377"
-	"github.com/consensys/gnark-crypto/ecc/bls12-377/fr"
-	"github.com/consensys/gnark/backend"
 	"github.com/consensys/gnark/backend/groth16"
-	"github.com/consensys/gnark/backend/witness"
-	"github.com/consensys/gnark/constraint"
-	cs_bls12377 "github.com/consensys/gnark/constraint/bls12-377"
 	"github.com/consensys/gnark/frontend"
+	groth16_bls12377 "github.com/consensys/gnark/internal/backend/bls12-377/groth16"
 	"github.com/consensys/gnark/std/algebra/fields_bls12377"
 	"github.com/consensys/gnark/std/algebra/sw_bls12377"
-	groth16_bls12377 "github.com/consensys/gnark/internal/backend/bls12-377/groth16"
 )
 
 // Proof represents a Groth16 proof
@@ -63,7 +58,7 @@ type VerifyingKey struct {
 // publicInputs do NOT contain the ONE_WIRE
 func Verify(api frontend.API, vk VerifyingKey, proof Proof, publicInputs []frontend.Variable) {
 	if len(vk.G1.K) == 0 {
-		panic("innver verifying key needs at least one point; VerifyingKey.G1 must be initialized before compiling circuit")
+		panic("inner verifying key needs at least one point; VerifyingKey.G1 must be initialized before compiling circuit")
 	}
 
 	// compute kSum = Σx.[Kvk(t)]1
@@ -111,42 +106,22 @@ func (vk *VerifyingKey) Assign(_ovk groth16.VerifyingKey) {
 	vk.G2.GammaNeg.Assign(&gammaNeg)
 }
 
-// Prepare the data for the inner proof.
-// Returns the public inputs string of the inner proof
-func GenerateBls12377InnerProof(_vk groth16.VerifyingKey, _proof groth16.Proof, w witness.Witness, r1cs constraint.ConstraintSystem) {
-	vk, vk_ok := _vk.(*groth16_bls12377.VerifyingKey)
-	if !vk_ok {
-		panic("expected *groth16_bls12377.VerifyingKey, got " + reflect.TypeOf(_vk).String())
+// Fill one point for inner verifying key
+func (vk *VerifyingKey) FillG1K(_ovk groth16.VerifyingKey) {
+	ovk, ok := _ovk.(*groth16_bls12377.VerifyingKey)
+	if !ok {
+		panic("expected *groth16_bls12377.VerifyingKey, got " + reflect.TypeOf(_ovk).String())
 	}
+	vk.G1.K = make([]sw_bls12377.G1Affine, len(ovk.G1.K))
+}
 
-	proof, proof_ok := _proof.(*groth16_bls12377.Proof)
-	if !proof_ok {
-		panic("expected *groth16_bls12377.Proof, got " + reflect.TypeOf(_proof).String())
+// Assign the proof values of Groth16
+func (proof *Proof) Assign(_oproof groth16.Proof) {
+	oproof, ok := _oproof.(*groth16_bls12377.Proof)
+	if !ok {
+		panic("expected *groth16_bls12377.Proof, got " + reflect.TypeOf(oproof).String())
 	}
-
-	publicWitness, err := w.Public()
-	if err != nil {
-		panic("can't parse public witness")
-	}
-
-	// generate the data to return for the bls12377 proof
-	var pk groth16_bls12377.ProvingKey
-	err = groth16_bls12377.Setup(r1cs.(*cs_bls12377.R1CS), &pk, vk)
-	if err != nil {
-		panic("setup failed")
-	}
-
-	inner_proof, err := groth16_bls12377.Prove(r1cs.(*cs_bls12377.R1CS), &pk, w.Vector().(fr.Vector), backend.ProverConfig{})
-	if err != nil {
-		panic("proof failed")
-	}
-
-	proof.Ar = inner_proof.Ar
-	proof.Bs = inner_proof.Bs
-	proof.Krs = inner_proof.Krs
-
-	// before returning verifies that the proof passes on bls12377
-	if err := groth16_bls12377.Verify(proof, vk, publicWitness.Vector().(fr.Vector)); err != nil {
-		panic("verify failed")
-	}
+	proof.Ar.Assign(&oproof.Ar)
+	proof.Krs.Assign(&oproof.Krs)
+	proof.Bs.Assign(&oproof.Bs)
 }

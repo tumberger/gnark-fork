@@ -24,13 +24,12 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bls12-377/fr"
 	"github.com/consensys/gnark-crypto/hash"
 	"github.com/consensys/gnark/backend"
+	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
-	"github.com/consensys/gnark/std/algebra/sw_bls12377"
 	"github.com/consensys/gnark/std/hash/mimc"
 	"github.com/consensys/gnark/test"
-	groth16_bls12377 "github.com/consensys/gnark/internal/backend/bls12-377/groth16"
 )
 
 const (
@@ -76,19 +75,16 @@ func (circuit *verifierCircuit) Define(api frontend.API) error {
 
 	return nil
 }
+
 func TestVerifier(t *testing.T) {
-	// get the data
-	var innerVk groth16_bls12377.VerifyingKey
-	var innerProof groth16_bls12377.Proof
 
 	// create a mock cs: knowing the preimage of a hash using mimc
-	var c mimcCircuit
-	r1cs, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &c)
+	var MimcCircuit mimcCircuit
+	r1cs, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &MimcCircuit)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// build the witness
 	var pre_assignment mimcCircuit
 	pre_assignment.PreImage = preImage
 	pre_assignment.Hash = publicHash
@@ -97,47 +93,48 @@ func TestVerifier(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	GenerateBls12377InnerProof(&innerVk, &innerProof, pre_witness, r1cs)
+	innerPk, innerVk, err := groth16.Setup(r1cs)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	// create an empty cs
+	proof, err := groth16.Prove(r1cs, innerPk, pre_witness)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	publicWitness, err := pre_witness.Public()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check that proof verifies before continuing
+	if err := groth16.Verify(proof, innerVk, publicWitness); err != nil {
+		t.Fatal(err)
+	}
+
 	var circuit verifierCircuit
-	circuit.InnerVk.G1.K = make([]sw_bls12377.G1Affine, len(innerVk.G1.K))
+	circuit.InnerVk.FillG1K(innerVk)
 
-	// create assignment, the private part consists of the proof,
-	// the public part is exactly the public part of the inner proof,
-	// up to the renaming of the inner ONE_WIRE to not conflict with the one wire of the outer proof.
 	var witness verifierCircuit
-	witness.InnerProof.Ar.Assign(&innerProof.Ar)
-	witness.InnerProof.Krs.Assign(&innerProof.Krs)
-	witness.InnerProof.Bs.Assign(&innerProof.Bs)
-	witness.InnerVk.Assign(&innerVk)
+	witness.InnerProof.Assign(proof)
+	witness.InnerVk.Assign(innerVk)
+	witness.Hash = preComputeMimc(preImage)
 
-	var assignment mimcCircuit
-	assignment.PreImage = preImage
-	witness.Hash = preComputeMimc(assignment.PreImage)
-
-	// verifies the cs
 	assert := test.NewAssert(t)
-	assert.ProverSucceeded(&circuit, &verifierCircuit{
-		InnerProof: witness.InnerProof,
-		InnerVk:    witness.InnerVk,
-		Hash:       witness.Hash,
-	}, test.WithCurves(ecc.BW6_761), test.WithBackends(backend.GROTH16))
+
+	assert.ProverSucceeded(&circuit, &witness, test.WithCurves(ecc.BW6_761), test.WithBackends(backend.GROTH16))
 }
 
 func BenchmarkCompile(b *testing.B) {
-	// get the data
-	var innerVk groth16_bls12377.VerifyingKey
-	var innerProof groth16_bls12377.Proof
 
 	// create a mock cs: knowing the preimage of a hash using mimc
-	var c mimcCircuit
-	cs, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &c)
+	var MimcCircuit mimcCircuit
+	_r1cs, err := frontend.Compile(ecc.BLS12_377.ScalarField(), r1cs.NewBuilder, &MimcCircuit)
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	// build the witness
 	var pre_assignment mimcCircuit
 	pre_assignment.PreImage = preImage
 	pre_assignment.Hash = publicHash
@@ -146,11 +143,28 @@ func BenchmarkCompile(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	GenerateBls12377InnerProof(&innerVk, &innerProof, pre_witness, cs)
+	innerPk, innerVk, err := groth16.Setup(_r1cs)
+	if err != nil {
+		b.Fatal(err)
+	}
 
-	// create an empty cs
+	proof, err := groth16.Prove(_r1cs, innerPk, pre_witness)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	publicWitness, err := pre_witness.Public()
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	// Check that proof verifies before continuing
+	if err := groth16.Verify(proof, innerVk, publicWitness); err != nil {
+		b.Fatal(err)
+	}
+
 	var circuit verifierCircuit
-	circuit.InnerVk.G1.K = make([]sw_bls12377.G1Affine, len(innerVk.G1.K))
+	circuit.InnerVk.FillG1K(innerVk)
 
 	var ccs constraint.ConstraintSystem
 	b.ResetTimer()
