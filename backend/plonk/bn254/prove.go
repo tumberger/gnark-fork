@@ -134,7 +134,6 @@ func Prove(spr *cs.SparseR1CS, pk *ProvingKey, fullWitness witness.Witness, opts
 	if err != nil {
 		return nil, fmt.Errorf("new instance: %w", err)
 	}
-	log.Debug().Dur("took", time.Since(startInstance)).Msg("prover done")
 
 	// Measure time for each operation
 	measureAndRun := func(operation func() error, description string) {
@@ -185,6 +184,7 @@ func Prove(spr *cs.SparseR1CS, pk *ProvingKey, fullWitness witness.Witness, opts
 	}
 
 	log.Debug().Dur("took", time.Duration(time.Since(startInstance).Nanoseconds())).Msg("prover done")
+	fmt.Printf("LOGGER: took=%v MSG=PROVER DONE\n", time.Duration(time.Since(startInstance).Nanoseconds()))
 	return instance.proof, nil
 }
 
@@ -399,6 +399,7 @@ func (s *instance) solveConstraints() error {
 	wg.Wait()
 
 	log := logger.Logger()
+	// log.
 	straert := time.Now()
 
 	// commit to l, r, o and add blinding factors
@@ -406,8 +407,9 @@ func (s *instance) solveConstraints() error {
 		return err
 	}
 	close(s.chLRO)
+	fmt.Printf("LOGGER: took=%v MSG=TIME TO COMPUTE COMMIT LRO\n", time.Duration(time.Since(straert).Nanoseconds()))
 
-	log.Debug().Dur("took", time.Duration(time.Since(straert).Nanoseconds())).Msg("TIME TO COMPUTE COMMIT LRO")
+	log.Info().Dur("took", time.Duration(time.Since(straert).Nanoseconds())).Msg("TIME TO COMPUTE COMMIT LRO")
 
 	return nil
 }
@@ -601,6 +603,7 @@ func (s *instance) evaluateConstraints() (err error) {
 	if err := commitToQuotient(s.h1(), s.h2(), s.h3(), s.proof, s.pk.Kzg); err != nil {
 		return err
 	}
+	fmt.Printf("LOGGER: took=%v MSG=TIME TO COMPUTE COMMIT H\n", time.Duration(time.Since(straert).Nanoseconds()))
 
 	log.Debug().Dur("took", time.Duration(time.Since(straert).Nanoseconds())).Msg("TIME TO COMPUTE COMMIT H")
 
