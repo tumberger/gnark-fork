@@ -538,6 +538,9 @@ func (s *instance) deriveZeta() (err error) {
 
 // evaluateConstraints computes H
 func (s *instance) evaluateConstraints() (err error) {
+
+	startInit := time.Now()
+
 	// clone polys from the proving key.
 	s.x[id_Ql] = s.pk.trace.Ql.Clone()
 	s.x[id_Qr] = s.pk.trace.Qr.Clone()
@@ -623,6 +626,8 @@ func (s *instance) evaluateConstraints() (err error) {
 
 	close(s.chH)
 
+	fmt.Printf("LOGGER: took=%v MSG=TIME TO EVALUATE CONSTRAINTS TOTAL H\n", time.Duration(time.Since(startInit).Nanoseconds()))
+
 	return nil
 }
 
@@ -670,6 +675,9 @@ func (s *instance) openZ() (err error) {
 	}
 	var zetaShifted fr.Element
 	zetaShifted.Mul(&s.zeta, &s.pk.Vk.Generator)
+
+	straert := time.Now()
+
 	s.blindedZ = getBlindedCoefficients(s.x[id_Z], s.bp[id_Bz])
 	// open z at zeta
 	s.proof.ZShiftedOpening, err = kzg.Open(s.blindedZ, zetaShifted, s.pk.Kzg)
@@ -677,6 +685,9 @@ func (s *instance) openZ() (err error) {
 		return err
 	}
 	close(s.chZOpening)
+
+	fmt.Printf("LOGGER: took=%v MSG=TIME TO OPEN COMMIT\n", time.Duration(time.Since(straert).Nanoseconds()))
+
 	return nil
 }
 
