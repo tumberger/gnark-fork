@@ -386,11 +386,18 @@ func (s *instance) solveConstraints() error {
 
 	wg.Wait()
 
+	log := logger.Logger()
+	straert := time.Now()
+
 	// commit to l, r, o and add blinding factors
 	if err := s.commitToLRO(); err != nil {
 		return err
 	}
+	
 	close(s.chLRO)
+	
+	log.Debug().Dur("took", time.Duration(time.Since(straert).Nanoseconds())).Msg("TIME TO COMPUTE COMMIT LRO")
+
 	return nil
 }
 
@@ -576,10 +583,16 @@ func (s *instance) evaluateConstraints() (err error) {
 		return err
 	}
 
+	log := logger.Logger()
+	straert := time.Now()
+
 	// commit to h
 	if err := commitToQuotient(s.h1(), s.h2(), s.h3(), s.proof, s.pk.Kzg); err != nil {
 		return err
 	}
+
+	log.Debug().Dur("took", time.Duration(time.Since(straert).Nanoseconds())).Msg("TIME TO COMPUTE COMMIT H")
+
 
 	if err := s.deriveZeta(); err != nil {
 		return err

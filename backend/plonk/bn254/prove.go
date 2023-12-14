@@ -126,53 +126,65 @@ func Prove(spr *cs.SparseR1CS, pk *ProvingKey, fullWitness witness.Witness, opts
 		return nil, fmt.Errorf("get prover options: %w", err)
 	}
 
-	start := time.Now()
-
-	// init instance
 	g, ctx := errgroup.WithContext(context.Background())
+
+	// Measure time for instance initialization
+	startInstance := time.Now()
 	instance, err := newInstance(ctx, spr, pk, fullWitness, &opt)
 	if err != nil {
 		return nil, fmt.Errorf("new instance: %w", err)
 	}
+	log.Debug().Dur("took", time.Since(startInstance)).Msg("prover done")
+
+	// Measure time for each operation
+	measureAndRun := func(operation func() error, description string) {
+		start := time.Now()
+		g.Go(func() error {
+			err := operation()
+			log.Debug().Msg(start.String())
+			log.Debug().Dur("took", time.Duration(time.Since(start).Nanoseconds())).Msg(description)
+			return err
+		})
+	}
 
 	// solve constraints
-	g.Go(instance.solveConstraints)
+	measureAndRun(instance.solveConstraints, "Solving constraints")
 
 	// compute numerator data
-	g.Go(instance.initComputeNumerator)
+	measureAndRun(instance.initComputeNumerator, "Computing numerator data")
 
 	// complete qk
-	g.Go(instance.completeQk)
+	measureAndRun(instance.completeQk, "Completing qk")
 
 	// init blinding polynomials
-	g.Go(instance.initBlindingPolynomials)
+	measureAndRun(instance.initBlindingPolynomials, "Initializing blinding polynomials")
 
 	// derive gamma, beta (copy constraint)
-	g.Go(instance.deriveGammaAndBeta)
+	measureAndRun(instance.deriveGammaAndBeta, "Deriving gamma and beta")
 
 	// compute accumulating ratio for the copy constraint
-	g.Go(instance.buildRatioCopyConstraint)
+	measureAndRun(instance.buildRatioCopyConstraint, "Building ratio for copy constraint")
 
 	// compute h
-	g.Go(instance.evaluateConstraints)
+	measureAndRun(instance.evaluateConstraints, "Evaluating constraints")
 
 	// open Z (blinded) at ωζ (proof.ZShiftedOpening)
-	g.Go(instance.openZ)
+	measureAndRun(instance.openZ, "Opening Z")
 
 	// fold the commitment to H ([H₀] + ζᵐ⁺²*[H₁] + ζ²⁽ᵐ⁺²⁾[H₂])
-	g.Go(instance.foldH)
+	measureAndRun(instance.foldH, "Folding the commitment to H")
 
 	// linearized polynomial
-	g.Go(instance.computeLinearizedPolynomial)
+	measureAndRun(instance.computeLinearizedPolynomial, "Computing linearized polynomial")
 
 	// Batch opening
-	g.Go(instance.batchOpening)
+	measureAndRun(instance.batchOpening, "Batch opening")
 
 	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 
-	log.Debug().Dur("took", time.Since(start)).Msg("prover done")
+	log.Debug().Dur("took", time.Duration(time.Since(startInstance).Nanoseconds())).Msg("prover done")
 	return instance.proof, nil
 }
 
@@ -386,11 +398,17 @@ func (s *instance) solveConstraints() error {
 
 	wg.Wait()
 
+	log := logger.Logger()
+	straert := time.Now()
+
 	// commit to l, r, o and add blinding factors
 	if err := s.commitToLRO(); err != nil {
 		return err
 	}
 	close(s.chLRO)
+
+	log.Debug().Dur("took", time.Duration(time.Since(straert).Nanoseconds())).Msg("TIME TO COMPUTE COMMIT LRO")
+
 	return nil
 }
 
@@ -576,14 +594,22 @@ func (s *instance) evaluateConstraints() (err error) {
 		return err
 	}
 
+	log := logger.Logger()
+	straert := time.Now()
+
 	// commit to h
 	if err := commitToQuotient(s.h1(), s.h2(), s.h3(), s.proof, s.pk.Kzg); err != nil {
 		return err
 	}
 
+	log.Debug().Dur("took", time.Duration(time.Since(straert).Nanoseconds())).Msg("TIME TO COMPUTE COMMIT H")
+
+
 	if err := s.deriveZeta(); err != nil {
 		return err
 	}
+
+	
 
 	// wait for clean up tasks to be done
 	select {
@@ -1196,6 +1222,7 @@ func coefficients(p []*iop.Polynomial) [][]fr.Element {
 	return res
 }
 
+// THIS IS RELEVANT
 func commitToQuotient(h1, h2, h3 []fr.Element, proof *Proof, kzgPk kzg.ProvingKey) error {
 	g := new(errgroup.Group)
 
@@ -1213,7 +1240,6 @@ func commitToQuotient(h1, h2, h3 []fr.Element, proof *Proof, kzgPk kzg.ProvingKe
 		proof.H[2], err = kzg.Commit(h3, kzgPk)
 		return
 	})
-
 	return g.Wait()
 }
 

@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/consensys/gnark/frontend"
+	comparator "github.com/consensys/gnark/std/math/cmp"
 
 	"github.com/consensys/gnark/std/internal/logderivprecomp"
 )
@@ -40,27 +41,35 @@ func New[T Float](api frontend.API) (*RealNumberField[T], error) {
 	return rnf, nil
 }
 
-func (rf *RealNumberField[T]) mul(p int, floatOne Float32, floatTwo Float32) [2]frontend.Variable {
+func (rf *RealNumberField[T]) mul(p int, floatOne Float32, floatTwo Float32) Float32 {
 
-	var result [2]frontend.Variable
+	var result Float32
 
-	e := rf.api.Add(floatOne.Exponent, floatTwo.Exponent)
+	rf.api.Add(floatOne.Exponent, floatTwo.Exponent)
 
 	// TODO: This is missing the middle term of
 	// m = α1.m * 2^(q+2) * α2.m
 	m := rf.api.Mul(floatOne.Mantissa, floatTwo.Mantissa)
 
 	compareVal := rf.api.Sub(int(math.Pow(2, float64(2*p+1))), int(math.Pow(2, float64(p-1))))
-	check := rf.api.IsZero(rf.api.Sub(rf.api.Cmp(compareVal, m), 1)) // Check if 2^2p+1 - 2^p-1 > m?
+	// p=23 bit --> paper: 24 bit
+	// 1.{23} * 2^E
+	// rf.api.Cmp(compareVal, m) // Check if 2^2p+1 - 2^p-1 > m?
+
+	// m < compareVal
+	// IsLessOrEqual(m, compareVal)
+	comparator.IsLessOrEqual(rf.api, m, compareVal)
 
 	// Allgemein mit modulo
 	// TODO: Implement Right Shift Hint
-	case1 := rightShift(rf.api, rf.api.Add(m, int(math.Pow(2, float64(p-1)))), p, 2*p+2)
-	case2 := rightShift(rf.api, rf.api.Add(m, int(math.Pow(2, float64(p)))), p+1, 2*p+2)
+	// rightShift(rf.api, rf.api.Add(m, int(math.Pow(2, float64(p-1)))), p, 2*p+2)
+	// rightShift(rf.api, rf.api.Add(m, int(math.Pow(2, float64(p)))), p+1, 2*p+2)
 
-	// Are these strictly necessary?
-	result[0] = rf.api.Select(check, e, rf.api.Add(e, 1))
-	result[1] = rf.api.Select(check, case1, case2)
+	// result.Exponent = rf.api.Select(check, e, rf.api.Add(e, 1))
+	// result.Mantissa = rf.api.Select(check, case1, case2)
+
+	result.Exponent = 0
+	result.Mantissa = 0
 
 	// TODO:
 	// For the sign bit, bit-wise operations can be implemented with precomputed lookup tables
@@ -69,8 +78,38 @@ func (rf *RealNumberField[T]) mul(p int, floatOne Float32, floatTwo Float32) [2]
 	return result
 }
 
+func (rf *RealNumberField[T]) add(k int, p int, floatOne Float32, floatTwo Float32) frontend.Variable {
+
+	mgn1 := rf.api.Add(floatOne.Mantissa, leftShift(rf.api, floatOne.Exponent, p+1, k))
+	mgn2 := rf.api.Add(floatTwo.Mantissa, leftShift(rf.api, floatTwo.Exponent, p+1, k))
+
+	check := rf.api.IsZero(rf.api.Sub(rf.api.Cmp(mgn1, mgn2), 1))
+
+	alphaE := rf.api.Select(check, floatOne.Exponent, floatTwo.Exponent)
+	alphaM := rf.api.Select(check, floatOne.Mantissa, floatTwo.Mantissa)
+	betaE := rf.api.Select(check, floatTwo.Exponent, floatOne.Exponent)
+	betaM := rf.api.Select(check, floatTwo.Mantissa, floatOne.Mantissa)
+
+	diff := rf.api.Sub(alphaE, betaE)
+
+	result, err := rf.api.Compiler().NewHint(leftShiftHint, 1, alphaM, diff)
+	if err != nil {
+		panic(err)
+	}
+
+	alphaM = result[0]
+
+	m := rf.api.Add(alphaM, betaM)
+
+	normalized := normalize(rf.api, p, betaE, m)
+
+	rf.api.Println(alphaE, alphaM, betaE, betaM, diff, result, m, normalized)
+
+	return check
+}
+
 // spaeter die funktion generisch machen und precision als konstante uebergeben
-func (rf *RealNumberField[T]) add(k int, p int, floatOne Float32, floatTwo Float32) [2]frontend.Variable {
+func (rf *RealNumberField[T]) addOld(k int, p int, floatOne Float32, floatTwo Float32) [2]frontend.Variable {
 
 	// [1-bit | 23-bit mantissa | 8-bit exponent ]
 

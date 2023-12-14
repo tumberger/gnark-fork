@@ -22,7 +22,9 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark-crypto/hash"
+	"github.com/consensys/gnark/backend/plonk"
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/frontend/cs/scs"
 	"github.com/consensys/gnark/test"
 )
 
@@ -92,4 +94,57 @@ func TestMimcAll(t *testing.T) {
 			test.WithCurves(curve))
 	}
 
+}
+
+func TestProofComputation(t *testing.T) {
+	var circuit, validWitness mimcCircuit
+	ccs, _ := frontend.Compile(ecc.BLS12_381.ScalarField(), scs.NewBuilder, &circuit)
+
+	srs, err := test.NewKZGSRS(ccs)
+	if err != nil {
+		panic(err)
+	}
+
+	pk, vk, _ := plonk.Setup(ccs, srs) // WIP
+
+	modulus := ecc.BLS12_381.ScalarField()
+	var data [10]big.Int
+	data[0].Sub(modulus, big.NewInt(1))
+	for i := 1; i < 10; i++ {
+		data[i].Add(&data[i-1], &data[i-1]).Mod(&data[i], modulus)
+	}
+
+	// running MiMC (Go)
+	goMimc := hash.MIMC_BLS12_381.New()
+	for i := 0; i < 10; i++ {
+		goMimc.Write(data[i].Bytes())
+	}
+	expectedh := goMimc.Sum(nil)
+
+	// assert correctness against correct witness
+	for i := 0; i < 10; i++ {
+		validWitness.Data[i] = data[i].String()
+	}
+	validWitness.ExpectedResult = expectedh
+
+	// assignment := Float32MultiplyCircuit{
+	// 	FloatOne: Float32{
+	// 		Exponent: 130,
+	// 		Mantissa: 10223616,
+	// 	},
+	// 	FloatTwo: Float32{
+	// 		Exponent: 131,
+	// 		Mantissa: 9732096,
+	// 	},
+	// 	ResE: 8,
+	// 	ResM: 9045504,
+	// }
+	witness, _ := frontend.NewWitness(&validWitness, ecc.BLS12_381.ScalarField())
+	publicWitness, _ := witness.Public()
+
+	proof, _ := plonk.Prove(ccs, pk, witness)
+	err = plonk.Verify(proof, vk, publicWitness)
+	if err != nil {
+		panic(err)
+	}
 }
