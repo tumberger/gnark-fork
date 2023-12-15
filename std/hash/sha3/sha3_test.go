@@ -162,3 +162,75 @@ func TestProofComputation(t *testing.T) {
 	// 	panic(err)
 	// }
 }
+
+func TestProofComputationTen(t *testing.T) {
+
+	assert := test.NewAssert(t)
+
+	in := make([]byte, 1000)
+	_, err := rand.Reader.Read(in)
+	assert.NoError(err)
+
+	for name := range testCases {
+		assert.Run(func(assert *test.Assert) {
+			name := name
+			strategy := testCases[name]
+			h := strategy.native()
+			h.Write(in)
+			expected := h.Sum(nil)
+
+			circuit := &sha3Circuit{
+				In:       make([]uints.U8, len(in)),
+				Expected: make([]uints.U8, len(expected)),
+				hasher:   name,
+			}
+			ccs, _ := frontend.Compile(ecc.BN254.ScalarField(), scs.NewBuilder, circuit)
+
+			srs, err := test.NewKZGSRS(ccs)
+			if err != nil {
+				panic(err)
+			}
+
+			pk, vk, _ := plonk.Setup(ccs, srs) // WIP
+
+			assignment := &sha3Circuit{
+				In:       uints.NewU8Array(in),
+				Expected: uints.NewU8Array(expected),
+			}
+
+			witness, _ := frontend.NewWitness(assignment, ecc.BN254.ScalarField())
+
+			publicWitness, _ := witness.Public()
+
+			proof, _ := plonk.Prove(ccs, pk, witness)
+			err = plonk.Verify(proof, vk, publicWitness)
+			if err != nil {
+				panic(err)
+			}
+			// if err := test.IsSolved(circuit, witness, ecc.BN254.ScalarField()); err != nil {
+			// 	t.Fatalf("%s: %s", name, err)
+			// }
+		}, name)
+	}
+
+	// assignment := Float32MultiplyCircuit{
+	// 	FloatOne: Float32{
+	// 		Exponent: 130,
+	// 		Mantissa: 10223616,
+	// 	},
+	// 	FloatTwo: Float32{
+	// 		Exponent: 131,
+	// 		Mantissa: 9732096,
+	// 	},
+	// 	ResE: 8,
+	// 	ResM: 9045504,
+	// }
+	// witness, _ := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())
+	// publicWitness, _ := witness.Public()
+
+	// proof, _ := plonk.Prove(ccs, pk, witness)
+	// err = plonk.Verify(proof, vk, publicWitness)
+	// if err != nil {
+	// 	panic(err)
+	// }
+}
