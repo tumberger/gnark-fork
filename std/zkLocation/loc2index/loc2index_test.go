@@ -12,6 +12,7 @@ import (
 	"github.com/consensys/gnark/backend/groth16"
 	"github.com/consensys/gnark/backend/plonk"
 	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/frontend/cs/r1cs"
 	"github.com/consensys/gnark/frontend/cs/scs"
 	"github.com/consensys/gnark/std/zkLocation/util"
 	"github.com/consensys/gnark/test"
@@ -247,7 +248,7 @@ func TestProofComputationPlonk(t *testing.T) {
 func TestProofComputationGroth(t *testing.T) {
 
 	circuit, assignment := setupLoc2IndexWrapper()
-	ccs, _ := frontend.Compile(ecc.BN254.ScalarField(), scs.NewBuilder, &circuit)
+	ccs, _ := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit)
 
 	// srs, err := test.NewKZGSRS(ccs)
 	pk, vk, err := groth16.Setup(ccs) // WIP
