@@ -95,7 +95,7 @@ func TestProofComputation(t *testing.T) {
 
 	assert := test.NewAssert(t)
 
-	in := make([]byte, 10)
+	in := make([]byte, 100)
 	_, err := rand.Reader.Read(in)
 	assert.NoError(err)
 
