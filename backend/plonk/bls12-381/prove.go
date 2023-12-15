@@ -173,6 +173,8 @@ func Prove(spr *cs.SparseR1CS, pk *ProvingKey, fullWitness witness.Witness, opts
 	}
 
 	log.Debug().Dur("took", time.Since(start)).Msg("prover done")
+	fmt.Printf("LOGGER: took=%v MSG=PROVER DONE\n", time.Duration(time.Since(start).Nanoseconds()))
+	
 	return instance.proof, nil
 }
 
