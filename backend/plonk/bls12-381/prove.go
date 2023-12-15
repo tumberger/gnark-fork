@@ -397,6 +397,9 @@ func (s *instance) solveConstraints() error {
 	}
 	
 	close(s.chLRO)
+
+	fmt.Printf("LOGGER: took=%v MSG=TIME TO COMPUTE COMMIT LRO\n", time.Duration(time.Since(straert).Nanoseconds()))
+
 	
 	log.Debug().Dur("took", time.Duration(time.Since(straert).Nanoseconds())).Msg("TIME TO COMPUTE COMMIT LRO")
 
@@ -592,6 +595,8 @@ func (s *instance) evaluateConstraints() (err error) {
 	if err := commitToQuotient(s.h1(), s.h2(), s.h3(), s.proof, s.pk.Kzg); err != nil {
 		return err
 	}
+
+	fmt.Printf("LOGGER: took=%v MSG=TIME TO COMPUTE COMMIT H\n", time.Duration(time.Since(straert).Nanoseconds()))
 
 	log.Debug().Dur("took", time.Duration(time.Since(straert).Nanoseconds())).Msg("TIME TO COMPUTE COMMIT H")
 
