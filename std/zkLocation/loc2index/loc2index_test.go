@@ -245,6 +245,40 @@ func TestProofComputationPlonk(t *testing.T) {
 	}
 }
 
+func TestProofComputationPlonkBLS(t *testing.T) {
+
+	circuit, assignment := setupLoc2IndexWrapper()
+	ccs, _ := frontend.Compile(ecc.BLS12_381.ScalarField(), scs.NewBuilder, &circuit)
+
+	srs, err := test.NewKZGSRS(ccs)
+	if err != nil {
+		panic(err)
+	}
+
+	pk, vk, _ := plonk.Setup(ccs, srs) // WIP
+
+	// assignment := Float32MultiplyCircuit{
+	// 	FloatOne: Float32{
+	// 		Exponent: 130,
+	// 		Mantissa: 10223616,
+	// 	},
+	// 	FloatTwo: Float32{
+	// 		Exponent: 131,
+	// 		Mantissa: 9732096,
+	// 	},
+	// 	ResE: 8,
+	// 	ResM: 9045504,
+	// }
+	witness, _ := frontend.NewWitness(&assignment, ecc.BLS12_381.ScalarField())
+	publicWitness, _ := witness.Public()
+
+	proof, _ := plonk.Prove(ccs, pk, witness)
+	err = plonk.Verify(proof, vk, publicWitness)
+	if err != nil {
+		panic(err)
+	}
+}
+
 func TestProofComputationGroth(t *testing.T) {
 
 	circuit, assignment := setupLoc2IndexWrapper()
