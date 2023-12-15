@@ -1,6 +1,11 @@
 package circuits
 
-import "github.com/consensys/gnark/frontend"
+import (
+	"fmt"
+	"time"
+
+	"github.com/consensys/gnark/frontend"
+)
 
 type commitCircuit struct {
 	Public frontend.Variable `gnark:",public"`
@@ -9,10 +14,14 @@ type commitCircuit struct {
 
 func (circuit *commitCircuit) Define(api frontend.API) error {
 	api.AssertIsDifferent(circuit.Public, 0)
+
+	straert := time.Now()
 	commitment, err := api.(frontend.Committer).Commit(circuit.X, circuit.Public, 5)
 	if err != nil {
 		return err
 	}
+	fmt.Printf("LOGGER: took=%v MSG=TIME TO COMPUTE COMMIT\n", time.Duration(time.Since(straert).Nanoseconds()))
+
 	api.AssertIsDifferent(commitment, 0)
 	a := api.Mul(circuit.X, circuit.X)
 	for i := 0; i < 10; i++ {
