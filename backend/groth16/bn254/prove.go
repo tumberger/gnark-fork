@@ -316,6 +316,7 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 		return nil, err
 	}
 
+	fmt.Printf("LOGGER: took=%v MSG=PROVER DONE\n", time.Duration(time.Since(start).Nanoseconds()))
 	log.Debug().Dur("took", time.Since(start)).Msg("prover done")
 
 	return proof, nil
