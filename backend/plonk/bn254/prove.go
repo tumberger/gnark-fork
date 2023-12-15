@@ -558,6 +558,8 @@ func (s *instance) evaluateConstraints() (err error) {
 	lone := make([]fr.Element, n)
 	lone[0].SetOne()
 
+	fmt.Printf("LOGGER: took=%v MSG=Pre Solver done H\n", time.Duration(time.Since(startInit).Nanoseconds()))
+
 	// wait for solver to be done
 	select {
 	case <-s.ctx.Done():
@@ -576,10 +578,14 @@ func (s *instance) evaluateConstraints() (err error) {
 	case <-s.chZ:
 	}
 
+	fmt.Printf("LOGGER: took=%v MSG=Z committed or context done H\n", time.Duration(time.Since(startInit).Nanoseconds()))
+
 	// derive alpha
 	if err = s.deriveAlpha(); err != nil {
 		return err
 	}
+
+	fmt.Printf("LOGGER: took=%v MSG=Derive alpha done H\n", time.Duration(time.Since(startInit).Nanoseconds()))
 
 	// TODO complete waste of memory find another way to do that
 	identity := make([]fr.Element, n)
@@ -594,10 +600,16 @@ func (s *instance) evaluateConstraints() (err error) {
 		return err
 	}
 
+	fmt.Printf("LOGGER: took=%v MSG=Compute Numerator done H\n", time.Duration(time.Since(startInit).Nanoseconds()))
+
+
 	s.h, err = divideByXMinusOne(numerator, [2]*fft.Domain{&s.pk.Domain[0], &s.pk.Domain[1]})
 	if err != nil {
 		return err
 	}
+
+	fmt.Printf("LOGGER: took=%v MSG=divideByXMinusOne done H\n", time.Duration(time.Since(startInit).Nanoseconds()))
+
 
 	log := logger.Logger()
 	straert := time.Now()
