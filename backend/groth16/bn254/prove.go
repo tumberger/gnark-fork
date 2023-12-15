@@ -79,6 +79,7 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 
 	privateCommittedValues := make([][]fr.Element, len(commitmentInfo))
 
+	fmt.Printf("LOGGER: MSG=OVERRIDE HINTS\n")
 	// override hints
 	bsb22ID := solver.GetHintID(fcs.Bsb22CommitmentComputePlaceholder)
 	solverOpts = append(solverOpts, solver.OverrideHint(bsb22ID, func(_ *big.Int, in []*big.Int, out []*big.Int) error {
@@ -139,6 +140,9 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 		return nil, err
 	}
 
+
+
+	straert := time.Now()
 	// H (witness reduction / FFT part)
 	var h []fr.Element
 	chHDone := make(chan struct{}, 1)
@@ -149,6 +153,9 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 		solution.C = nil
 		chHDone <- struct{}{}
 	}()
+
+	fmt.Printf("LOGGER: took=%v MSG=TIME TO COMPUTE H / Witness Reduction\n", time.Duration(time.Since(straert).Nanoseconds()))
+
 
 	// we need to copy and filter the wireValues for each multi exp
 	// as pk.G1.A, pk.G1.B and pk.G2.B may have (a significant) number of point at infinity
