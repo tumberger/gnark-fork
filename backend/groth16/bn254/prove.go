@@ -91,10 +91,14 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 			privateCommittedValues[i][j].SetBigInt(inJ)
 		}
 
+		straert := time.Now()
+
 		var err error
 		if proof.Commitments[i], err = pk.CommitmentKeys[i].Commit(privateCommittedValues[i]); err != nil {
 			return err
 		}
+
+		fmt.Printf("LOGGER: took=%v MSG=TIME TO COMPUTE COMMIT PEDERSEN\n", time.Duration(time.Since(straert).Nanoseconds()))
 
 		opt.HashToFieldFn.Write(constraint.SerializeCommitment(proof.Commitments[i].Marshal(), hashed, (fr.Bits-1)/8+1))
 		hashBts := opt.HashToFieldFn.Sum(nil)
