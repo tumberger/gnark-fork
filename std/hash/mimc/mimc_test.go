@@ -107,7 +107,7 @@ func TestProofComputation(t *testing.T) {
 
 	pk, vk, _ := plonk.Setup(ccs, srs) // WIP
 
-	modulus := ecc.BLS12_381.ScalarField()
+	modulus := ecc.BN254.ScalarField()
 	var data [10]big.Int
 	data[0].Sub(modulus, big.NewInt(1))
 	for i := 1; i < 10; i++ {
