@@ -506,12 +506,12 @@ func (s *instance) deriveGammaAndBeta() error {
 	return nil
 }
 
-func saveCoefficients(id string, p *iop.Polynomial) {
+func saveCoefficients(id string, coeffs []fr.Element) {
 	if id == "none" {
 		return
 	}
 
-	filename := fmt.Sprintf("coefficients_One_%s.txt", id)
+	filename := fmt.Sprintf("coefficients_Two_%s.txt", id)
 	file, err := os.Create(filename)
 	if err != nil {
 		fmt.Printf("Error creating file %s: %v\n", filename, err)
@@ -519,7 +519,7 @@ func saveCoefficients(id string, p *iop.Polynomial) {
 	}
 	defer file.Close()
 
-	coeffs := p.Coefficients()
+	// coeffs := p.Coefficients()
 
 	for _, coeff := range coeffs {
 		_, err := file.WriteString(fmt.Sprintf("%v\n", coeff))
@@ -539,7 +539,7 @@ func saveCoefficients(id string, p *iop.Polynomial) {
 // /!\ The polynomial p is supposed to be in Lagrange form.
 func (s *instance) commitToPolyAndBlinding(p, b *iop.Polynomial, id string) (commit curve.G1Affine, err error) {
 
-	saveCoefficients(id, p)
+	saveCoefficients(id, p.Coefficients())
 
 	commit, err = kzg.Commit(p.Coefficients(), s.pk.KzgLagrange)
 
@@ -1028,9 +1028,14 @@ func (s *instance) computeNumerator() (*iop.Polynomial, error) {
 		y = s.bp[id_Bz].Evaluate(s.twiddles0[(i+1)%int(n)])
 		u[id_ZS].Add(&u[id_ZS], &y)
 
+		
+		
+
 		a := gateConstraint(u...)
 		b := orderingConstraint(u...)
 		c := ratioLocalConstraint(u...)
+		
+		
 		c.Mul(&c, &s.alpha).Add(&c, &b).Mul(&c, &s.alpha).Add(&c, &a)
 		return c
 	}
@@ -1058,6 +1063,8 @@ func (s *instance) computeNumerator() (*iop.Polynomial, error) {
 	// of the result polynomial
 	m := uint64(s.pk.Domain[1].Cardinality)
 	mm := uint64(64 - bits.TrailingZeros64(m))
+
+	thisStart := time.Now()
 
 	for i := 0; i < rho; i++ {
 
@@ -1126,6 +1133,8 @@ func (s *instance) computeNumerator() (*iop.Polynomial, error) {
 		}
 	}
 
+	fmt.Printf("LOGGER: took=%v MSG=TIME TO GATE, ORDER, RATIO CONSTRAINT\n", time.Duration(time.Since(thisStart).Nanoseconds()))
+
 	// scale everything back
 	go func() {
 		for i := id_ZS; i < len(s.x); i++ {
@@ -1155,6 +1164,8 @@ func (s *instance) computeNumerator() (*iop.Polynomial, error) {
 	wgBuf.Wait()
 
 	res := iop.NewPolynomial(&cres, iop.Form{Basis: iop.LagrangeCoset, Layout: iop.BitReverse})
+
+	saveCoefficients("res", res.Coefficients())
 
 	return res, nil
 
@@ -1281,6 +1292,10 @@ func coefficients(p []*iop.Polynomial) [][]fr.Element {
 // THIS IS RELEVANT
 func commitToQuotient(h1, h2, h3 []fr.Element, proof *Proof, kzgPk kzg.ProvingKey) error {
 	g := new(errgroup.Group)
+
+	saveCoefficients("h1", h1)
+	saveCoefficients("h2", h2)
+	saveCoefficients("h3", h3)
 
 	g.Go(func() (err error) {
 		proof.H[0], err = kzg.Commit(h1, kzgPk)
