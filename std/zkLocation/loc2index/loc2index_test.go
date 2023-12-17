@@ -48,11 +48,26 @@ const loc2IndexExample = `{
 // Longitude: 177.62°
 // Latitude: 1,500,110,492 (in radians ×109×109)
 // Longitude: 3,100,053,817 (in radians ×109×109) ​
-const loc2IndexExample_MunichOne = `{
+const loc2IndexExampleTwo = `{
     "Lat": "1500110492",
     "Lng": "3100053817",
 	"latisneg": "1",
 	"lngisneg": "1",
+	"i": "1",
+	"j": "0",
+	"k": "0",
+	"res": "0"
+}`
+
+// Lat: 48.134
+// Long: 11.582
+// Latitude: 840,096,782 (in radians ×109×109)
+// Longitude: 202,144,034 (in radians ×109×109) ​
+const loc2IndexExample_MunichOne = `{
+    "Lat": "840096782",
+    "Lng": "202144034",
+	"latisneg": "0",
+	"lngisneg": "0",
 	"i": "1",
 	"j": "0",
 	"k": "0",
@@ -77,7 +92,7 @@ const loc2IndexExample_MunichTwo = `{
 // Common setup function for both tests
 func setupLoc2IndexWrapper() (loc2IndexWrapper, loc2IndexWrapper) {
 	var data loc2IndexParams
-	err := json.Unmarshal([]byte(loc2IndexExample_MunichTwo), &data)
+	err := json.Unmarshal([]byte(loc2IndexExample_MunichOne), &data)
 	if err != nil {
 		panic(err)
 	}
