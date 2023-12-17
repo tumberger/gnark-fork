@@ -26,6 +26,7 @@ import (
 	"runtime"
 	"sync"
 	"time"
+	"os"
 
 	"golang.org/x/sync/errgroup"
 
@@ -453,17 +454,17 @@ func (s *instance) commitToLRO() error {
 	g := new(errgroup.Group)
 
 	g.Go(func() (err error) {
-		s.proof.LRO[0], err = s.commitToPolyAndBlinding(s.x[id_L], s.bp[id_Bl])
+		s.proof.LRO[0], err = s.commitToPolyAndBlinding(s.x[id_L], s.bp[id_Bl], "none")
 		return
 	})
 
 	g.Go(func() (err error) {
-		s.proof.LRO[1], err = s.commitToPolyAndBlinding(s.x[id_R], s.bp[id_Br])
+		s.proof.LRO[1], err = s.commitToPolyAndBlinding(s.x[id_R], s.bp[id_Br], "none")
 		return
 	})
 
 	g.Go(func() (err error) {
-		s.proof.LRO[2], err = s.commitToPolyAndBlinding(s.x[id_O], s.bp[id_Bo])
+		s.proof.LRO[2], err = s.commitToPolyAndBlinding(s.x[id_O], s.bp[id_Bo], "none")
 		return
 	})
 
@@ -505,11 +506,40 @@ func (s *instance) deriveGammaAndBeta() error {
 	return nil
 }
 
+func saveCoefficients(id string, p *iop.Polynomial) {
+	if id == "none" {
+		return
+	}
+
+	filename := fmt.Sprintf("coefficients_%s.txt", id)
+	file, err := os.Create(filename)
+	if err != nil {
+		fmt.Printf("Error creating file %s: %v\n", filename, err)
+		return
+	}
+	defer file.Close()
+
+	coeffs := p.Coefficients()
+
+	for _, coeff := range coeffs {
+		_, err := file.WriteString(fmt.Sprintf("%v\n", coeff))
+		if err != nil {
+			fmt.Printf("Error writing to file %s: %v\n", filename, err)
+			return
+		}
+	}
+
+	fmt.Printf("Coefficients saved to %s\n", filename)
+}
+
+
 // commitToPolyAndBlinding computes the KZG commitment of a polynomial p
 // in Lagrange form (large degree)
 // and add the contribution of a blinding polynomial b (small degree)
 // /!\ The polynomial p is supposed to be in Lagrange form.
-func (s *instance) commitToPolyAndBlinding(p, b *iop.Polynomial) (commit curve.G1Affine, err error) {
+func (s *instance) commitToPolyAndBlinding(p, b *iop.Polynomial, id string) (commit curve.G1Affine, err error) {
+
+	saveCoefficients(id, p)
 
 	commit, err = kzg.Commit(p.Coefficients(), s.pk.KzgLagrange)
 
@@ -670,7 +700,7 @@ func (s *instance) buildRatioCopyConstraint() (err error) {
 	}
 
 	// commit to the blinded version of z
-	s.proof.Z, err = s.commitToPolyAndBlinding(s.x[id_Z], s.bp[id_Bz])
+	s.proof.Z, err = s.commitToPolyAndBlinding(s.x[id_Z], s.bp[id_Bz], "measure")
 
 	close(s.chZ)
 

@@ -55,7 +55,9 @@ func (circuit *Float32MultiplyCircuit) Define(api frontend.API) error {
 	// computedResult := floatAPI.mulOld(precision, circuit.FloatOne, circuit.FloatTwo)
 
 	api.Println(computedResult.Exponent)
-	api.Println(computedResult.Mantissa)
+	api.Println("The Computed result", computedResult.Mantissa)
+
+	api.Println("The SHOULD result", circuit.ResM)
 
 	// Compare results (with unbiased exponent and normalized mantissa) to inputs
 	api.AssertIsEqual(circuit.ResE, computedResult.Exponent)
@@ -147,17 +149,36 @@ func TestProofComputation(t *testing.T) {
 
 	pk, vk, _ := plonk.Setup(ccs, srs) // WIP
 
+	// 48.135 * 11.582 = 557.499570
+	// assignment := Float32MultiplyCircuit{
+	// 	FloatOne: Float32{
+	// 		Exponent: 132,
+	// 		Mantissa: 12618301,
+	// 	},
+	// 	FloatTwo: Float32{
+	// 		Exponent: 130,
+	// 		Mantissa: 12144607,
+	// 	},
+	// 	ResE: 9,
+	// 	// THIS IS WHAT IS COMPUTED AS MANTISSA IN PLAIN GO
+	// 	// ResM: 9134073,
+	// 	ResM: 9134072,
+	// }
+
+	// 48.134 * 11.582 = 557.487988
 	assignment := Float32MultiplyCircuit{
 		FloatOne: Float32{
-			Exponent: 130,
-			Mantissa: 10223616,
+			Exponent: 132,
+			Mantissa: 12618039,
 		},
 		FloatTwo: Float32{
-			Exponent: 131,
-			Mantissa: 9732096,
+			Exponent: 130,
+			Mantissa: 12144607,
 		},
-		ResE: 8,
-		ResM: 9045504,
+		ResE: 9, // 136 - 127
+		// THIS IS WHAT IS COMPUTED AS MANTISSA IN PLAIN GO
+		// ResM: 9133883,
+		ResM: 9133883,
 	}
 
 	// Define the floating point numbers

@@ -29,11 +29,45 @@ type loc2IndexParams struct {
 	Resolution    int `json:"res,string"`
 }
 
+// Latitude: 85.94°
+// Longitude: 177.62°
+// Latitude: 1,500,000,000 (in radians ×109×109)
+// Longitude: 3,100,000,000 (in radians ×109×109)
 const loc2IndexExample = `{
     "Lat": "1500000000",
     "Lng": "3100000000",
 	"latisneg": "1",
 	"lngisneg": "1",
+	"i": "1",
+	"j": "0",
+	"k": "0",
+	"res": "0"
+}`
+
+// Latitude: 85.95°
+// Longitude: 177.62°
+// Latitude: 1,500,110,492 (in radians ×109×109)
+// Longitude: 3,100,053,817 (in radians ×109×109) ​
+const loc2IndexExample_MunichOne = `{
+    "Lat": "1500110492",
+    "Lng": "3100053817",
+	"latisneg": "1",
+	"lngisneg": "1",
+	"i": "1",
+	"j": "0",
+	"k": "0",
+	"res": "0"
+}`
+
+// Lat: 48.135
+// Long: 11.582
+// Latitude: 840,114,235 (in radians ×109×109)
+// Longitude: 202,144,034 (in radians ×109×109) ​
+const loc2IndexExample_MunichTwo = `{
+    "Lat": "840114235",
+    "Lng": "202144034",
+	"latisneg": "0",
+	"lngisneg": "0",
 	"i": "1",
 	"j": "0",
 	"k": "0",
@@ -208,7 +242,7 @@ func TestLoc2IndexProving(t *testing.T) {
 	circuit, assignment := setupLoc2IndexWrapper()
 
 	// Proof successfully generated
-	assert.ProverSucceeded(&circuit, &assignment)
+	assert.ProverSucceeded(&circuit, &assignment, test.WithBackends(backend.GROTH16))
 }
 
 func TestProofComputationPlonk(t *testing.T) {
