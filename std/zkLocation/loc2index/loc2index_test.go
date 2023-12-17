@@ -77,7 +77,7 @@ const loc2IndexExample_MunichTwo = `{
 // Common setup function for both tests
 func setupLoc2IndexWrapper() (loc2IndexWrapper, loc2IndexWrapper) {
 	var data loc2IndexParams
-	err := json.Unmarshal([]byte(loc2IndexExample_MunichOne), &data)
+	err := json.Unmarshal([]byte(loc2IndexExample_MunichTwo), &data)
 	if err != nil {
 		panic(err)
 	}
@@ -282,7 +282,7 @@ func TestProofComputationPlonk(t *testing.T) {
 func TestProofComputationPlonkBLS(t *testing.T) {
 
 	circuit, assignment := setupLoc2IndexWrapper()
-	ccs, _ := frontend.Compile(ecc.BN254.ScalarField(), scs.NewBuilder, &circuit)
+	ccs, _ := frontend.Compile(ecc.BLS12_381.ScalarField(), scs.NewBuilder, &circuit)
 
 	srs, err := test.NewKZGSRS(ccs)
 	if err != nil {
@@ -303,7 +303,7 @@ func TestProofComputationPlonkBLS(t *testing.T) {
 	// 	ResE: 8,
 	// 	ResM: 9045504,
 	// }
-	witness, _ := frontend.NewWitness(&assignment, ecc.BN254.ScalarField())
+	witness, _ := frontend.NewWitness(&assignment, ecc.BLS12_381.ScalarField())
 	publicWitness, _ := witness.Public()
 
 	proof, _ := plonk.Prove(ccs, pk, witness)
