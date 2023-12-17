@@ -98,7 +98,7 @@ func TestMimcAll(t *testing.T) {
 
 func TestProofComputation(t *testing.T) {
 	var circuit, validWitness mimcCircuit
-	ccs, _ := frontend.Compile(ecc.BLS12_381.ScalarField(), scs.NewBuilder, &circuit)
+	ccs, _ := frontend.Compile(ecc.BN254.ScalarField(), scs.NewBuilder, &circuit)
 
 	srs, err := test.NewKZGSRS(ccs)
 	if err != nil {
@@ -115,7 +115,7 @@ func TestProofComputation(t *testing.T) {
 	}
 
 	// running MiMC (Go)
-	goMimc := hash.MIMC_BLS12_381.New()
+	goMimc := hash.MIMC_BN254.New()
 	for i := 0; i < 10; i++ {
 		goMimc.Write(data[i].Bytes())
 	}
@@ -139,7 +139,7 @@ func TestProofComputation(t *testing.T) {
 	// 	ResE: 8,
 	// 	ResM: 9045504,
 	// }
-	witness, _ := frontend.NewWitness(&validWitness, ecc.BLS12_381.ScalarField())
+	witness, _ := frontend.NewWitness(&validWitness, ecc.BN254.ScalarField())
 	publicWitness, _ := witness.Public()
 
 	proof, _ := plonk.Prove(ccs, pk, witness)
