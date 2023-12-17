@@ -77,7 +77,7 @@ const loc2IndexExample_MunichTwo = `{
 // Common setup function for both tests
 func setupLoc2IndexWrapper() (loc2IndexWrapper, loc2IndexWrapper) {
 	var data loc2IndexParams
-	err := json.Unmarshal([]byte(loc2IndexExample), &data)
+	err := json.Unmarshal([]byte(loc2IndexExample_MunichTwo), &data)
 	if err != nil {
 		panic(err)
 	}
