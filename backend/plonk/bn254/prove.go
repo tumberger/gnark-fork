@@ -511,7 +511,7 @@ func saveCoefficients(id string, p *iop.Polynomial) {
 		return
 	}
 
-	filename := fmt.Sprintf("coefficients_%s.txt", id)
+	filename := fmt.Sprintf("coefficients_One_%s.txt", id)
 	file, err := os.Create(filename)
 	if err != nil {
 		fmt.Printf("Error creating file %s: %v\n", filename, err)
