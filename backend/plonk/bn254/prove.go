@@ -454,17 +454,17 @@ func (s *instance) commitToLRO() error {
 	g := new(errgroup.Group)
 
 	g.Go(func() (err error) {
-		s.proof.LRO[0], err = s.commitToPolyAndBlinding(s.x[id_L], s.bp[id_Bl], "none")
+		s.proof.LRO[0], err = s.commitToPolyAndBlinding(s.x[id_L], s.bp[id_Bl], "L")
 		return
 	})
 
 	g.Go(func() (err error) {
-		s.proof.LRO[1], err = s.commitToPolyAndBlinding(s.x[id_R], s.bp[id_Br], "none")
+		s.proof.LRO[1], err = s.commitToPolyAndBlinding(s.x[id_R], s.bp[id_Br], "R")
 		return
 	})
 
 	g.Go(func() (err error) {
-		s.proof.LRO[2], err = s.commitToPolyAndBlinding(s.x[id_O], s.bp[id_Bo], "none")
+		s.proof.LRO[2], err = s.commitToPolyAndBlinding(s.x[id_O], s.bp[id_Bo], "O")
 		return
 	})
 
@@ -700,7 +700,7 @@ func (s *instance) buildRatioCopyConstraint() (err error) {
 	}
 
 	// commit to the blinded version of z
-	s.proof.Z, err = s.commitToPolyAndBlinding(s.x[id_Z], s.bp[id_Bz], "measure")
+	s.proof.Z, err = s.commitToPolyAndBlinding(s.x[id_Z], s.bp[id_Bz], "Z")
 
 	close(s.chZ)
 
