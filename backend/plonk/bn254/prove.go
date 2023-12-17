@@ -511,25 +511,25 @@ func saveCoefficients(id string, coeffs []fr.Element) {
 		return
 	}
 
-	// filename := fmt.Sprintf("coefficients_Two_%s.txt", id)
-	// file, err := os.Create(filename)
-	// if err != nil {
-	// 	fmt.Printf("Error creating file %s: %v\n", filename, err)
-	// 	return
-	// }
-	// defer file.Close()
+	filename := fmt.Sprintf("coefficients_Two_%s.txt", id)
+	file, err := os.Create(filename)
+	if err != nil {
+		fmt.Printf("Error creating file %s: %v\n", filename, err)
+		return
+	}
+	defer file.Close()
 
-	// // coeffs := p.Coefficients()
+	// coeffs := p.Coefficients()
 
-	// for _, coeff := range coeffs {
-	// 	_, err := file.WriteString(fmt.Sprintf("%v\n", coeff))
-	// 	if err != nil {
-	// 		fmt.Printf("Error writing to file %s: %v\n", filename, err)
-	// 		return
-	// 	}
-	// }
+	for _, coeff := range coeffs {
+		_, err := file.WriteString(fmt.Sprintf("%v\n", coeff))
+		if err != nil {
+			fmt.Printf("Error writing to file %s: %v\n", filename, err)
+			return
+		}
+	}
 
-	fmt.Printf("Coefficients saved to %s\n", id)
+	fmt.Printf("Coefficients saved to %s\n", filename)
 }
 
 
