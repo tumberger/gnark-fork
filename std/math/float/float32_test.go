@@ -51,7 +51,8 @@ func (circuit *Float32MultiplyCircuit) Define(api frontend.API) error {
 	circuit.FloatOne.Exponent = api.Sub(circuit.FloatOne.Exponent, 127)
 	circuit.FloatTwo.Exponent = api.Sub(circuit.FloatTwo.Exponent, 127)
 
-	computedResult := floatAPI.multiplyFloat32(k, circuit.FloatOne, circuit.FloatTwo)
+	// computedResult := floatAPI.multiplyFloat32(k, circuit.FloatOne, circuit.FloatTwo)
+	computedResult := floatAPI.AddFloat32(k, circuit.FloatOne, circuit.FloatTwo)
 	// computedResult := floatAPI.mulOld(precision, circuit.FloatOne, circuit.FloatTwo)
 
 	api.Println(computedResult.Exponent)
@@ -124,10 +125,12 @@ func TestFloat32Solving(t *testing.T) {
 		FloatOne: Float32{
 			Exponent: 132,
 			Mantissa: 12618301,
+			Sign:     0,
 		},
 		FloatTwo: Float32{
 			Exponent: 130,
 			Mantissa: 12144607,
+			Sign:     0,
 		},
 		ResE: 9,
 		// THIS IS WHAT IS COMPUTED AS MANTISSA IN PLAIN GO
@@ -150,36 +153,36 @@ func TestProofComputation(t *testing.T) {
 	pk, vk, _ := plonk.Setup(ccs, srs) // WIP
 
 	// 48.135 * 11.582 = 557.499570
-	// assignment := Float32MultiplyCircuit{
-	// 	FloatOne: Float32{
-	// 		Exponent: 132,
-	// 		Mantissa: 12618301,
-	// 	},
-	// 	FloatTwo: Float32{
-	// 		Exponent: 130,
-	// 		Mantissa: 12144607,
-	// 	},
-	// 	ResE: 9,
-	// 	// THIS IS WHAT IS COMPUTED AS MANTISSA IN PLAIN GO
-	// 	// ResM: 9134073,
-	// 	ResM: 9134072,
-	// }
-
-	// 48.134 * 11.582 = 557.487988
 	assignment := Float32MultiplyCircuit{
 		FloatOne: Float32{
 			Exponent: 132,
-			Mantissa: 12618039,
+			Mantissa: 12618301,
 		},
 		FloatTwo: Float32{
 			Exponent: 130,
 			Mantissa: 12144607,
 		},
-		ResE: 9, // 136 - 127
+		ResE: 9,
 		// THIS IS WHAT IS COMPUTED AS MANTISSA IN PLAIN GO
-		// ResM: 9133883,
-		ResM: 9133883,
+		// ResM: 9134073,
+		ResM: 9134072,
 	}
+
+	// 48.134 * 11.582 = 557.487988
+	// assignment := Float32MultiplyCircuit{
+	// 	FloatOne: Float32{
+	// 		Exponent: 132,
+	// 		Mantissa: 12618039,
+	// 	},
+	// 	FloatTwo: Float32{
+	// 		Exponent: 130,
+	// 		Mantissa: 12144607,
+	// 	},
+	// 	ResE: 9, // 136 - 127
+	// 	// THIS IS WHAT IS COMPUTED AS MANTISSA IN PLAIN GO
+	// 	// ResM: 9133883,
+	// 	ResM: 9133883,
+	// }
 
 	// Define the floating point numbers
 	a := float32(48.134)

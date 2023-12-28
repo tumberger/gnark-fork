@@ -7,6 +7,10 @@ import (
 	"github.com/consensys/gnark/frontend"
 	comparator "github.com/consensys/gnark/std/math/cmp"
 
+	// utils "float32/utils"
+
+	// hints "github.com/consensys/gnark/std/math/float32/hints"
+
 	// "github.com/consensys/gnark/std/math/float32/hints"
 
 	"github.com/consensys/gnark/std/internal/logderivprecomp"
@@ -19,6 +23,7 @@ const (
 type Float32 struct {
 	Exponent frontend.Variable
 	Mantissa frontend.Variable
+	Sign     frontend.Variable
 }
 
 type RealNumberField[T Float32] struct {
@@ -40,21 +45,14 @@ func New[T Float](api frontend.API) (*RealNumberField[T], error) {
 		return nil, fmt.Errorf("new and table: %w", err)
 	}
 
-	shiftT, err := logderivprecomp.New(api, shiftHint, []uint{8})
-	if err != nil {
-		return nil, fmt.Errorf("new and table: %w", err)
-	}
-
 	rnf := &RealNumberField[T]{
-		api:    api,
-		xorT:   xorT,
-		andT:   andT,
-		shiftT: shiftT,
+		api:  api,
+		xorT: xorT,
+		andT: andT,
 	}
 	return rnf, nil
 }
 
-// func multiplyFloat32(api frontend.API, k int, p int, e1 frontend.Variable, m1 frontend.Variable, e2 frontend.Variable, m2 frontend.Variable) [2]frontend.Variable {
 func (rf *RealNumberField[T]) multiplyFloat32(k int, floatOne Float32, floatTwo Float32) Float32 {
 
 	var result Float32
@@ -101,6 +99,86 @@ func (rf *RealNumberField[T]) multiplyFloat32(k int, floatOne Float32, floatTwo 
 	return result
 }
 
+func greaterThan(api frontend.API, k int, floatOne Float32, floatTwo Float32) frontend.Variable {
+
+	// Make exponents positive for correct comparison
+	floatOne.Exponent = api.Add(floatOne.Exponent, int(math.Pow(2, float64(k-1)))-1)
+	floatTwo.Exponent = api.Add(floatTwo.Exponent, int(math.Pow(2, float64(k-1)))-1)
+
+	// Check if e1 > e2?
+	eLT := api.Sub(1, comparator.IsLess(api, floatOne.Exponent, floatTwo.Exponent))
+	// Check if e1 == e2?
+	eEQ := api.IsZero(api.Sub(floatOne.Exponent, floatTwo.Exponent))
+	// Check if x[1] > y[1]?
+	mLT := api.Sub(1, comparator.IsLess(api, floatOne.Mantissa, floatTwo.Mantissa))
+
+	eEQANDmLT := api.Select(eEQ, mLT, 0)
+
+	return api.Select(eLT, api.Sub(1, eEQANDmLT), eEQANDmLT)
+}
+
+func AddFloat32(api frontend.API, k int, p int, FloatOne Float32, FloatTwo Float32) [3]frontend.Variable {
+
+	// [1-bit | 23-bit mantissa | 8-bit exponent ]
+
+	// Assumes a normalized mantissa in range [2^p, 2^p+1) and k-bit exponent as input
+	limit := int(math.Pow(2, float64(p+1))) - 1
+	api.AssertIsLessOrEqual(FloatOne.Mantissa, limit)
+	api.AssertIsLessOrEqual(FloatOne.Mantissa, limit)
+
+	// TODO: if `e` is zero, then `m` must be zero
+
+	var ret [3]frontend.Variable
+
+	check := greaterThan(api, k, FloatOne, FloatTwo)
+
+	alphaE := api.Select(check, FloatTwo.Exponent, FloatOne.Exponent)
+	alphaM := api.Select(check, FloatOne.Mantissa, FloatOne.Mantissa)
+	alphaS := api.Select(check, FloatTwo.Sign, FloatOne.Sign)
+	betaE := api.Select(check, FloatOne.Exponent, FloatTwo.Exponent)
+	betaM := api.Select(check, FloatOne.Mantissa, FloatTwo.Mantissa)
+	betaS := api.Select(check, FloatOne.Sign, FloatTwo.Sign)
+
+	diff := api.Sub(alphaE, betaE)
+	api.Println(diff)
+
+	// the smaller exp value will be ignored during the final rounding step if diff > p+1
+	ignored := api.IsZero(api.Sub(api.Cmp(diff, (p+1)), 1)) // Check if diff > p+1?
+
+	// make sure argument for shift isn't negative -- if negative Cmp returns -1
+	api.AssertIsBoolean(api.Cmp(diff, 0))
+	shifted, err := api.Compiler().NewHint(LeftShiftHint, 1, alphaM, diff)
+	if err != nil {
+		panic(err)
+	}
+	alphaM = api.Select(ignored, alphaM, shifted[0])
+	//api.Println(alphaM)
+
+	subtract := api.Select(alphaS, api.Select(betaS, 0, 1), betaS)
+	// WHAT IF betaM MUCH LARGER AND SUBTRACTED?
+	m := api.Select(subtract, api.Sub(alphaM, betaM), api.Add(alphaM, betaM))
+	stub := BaseM
+	m = api.Select(ignored, stub, m)
+	//api.Println(m)
+
+	var FloatTemp Float32
+
+	FloatTemp.Exponent = betaM
+	FloatTemp.Mantissa = m
+
+	FloatNormalized := normalize(api, p, FloatTemp)
+	FloatRounded := roundAndCheck(api, p, FloatNormalized)
+	checked := checkOverUnderFlows(api, k, FloatRounded)
+
+	ret[0] = alphaS
+	ret[1] = api.Select(ignored, alphaE, checked.Exponent)
+	ret[2] = api.Select(ignored, alphaM, checked.Mantissa)
+
+	api.Println(ret)
+
+	return ret
+}
+
 func checkOverUnderFlows(api frontend.API, k int, value Float32) Float32 {
 
 	var result Float32
@@ -136,104 +214,105 @@ func checkOverUnderFlows(api frontend.API, k int, value Float32) Float32 {
 	return result
 }
 
-func (rf *RealNumberField[T]) add(k int, p int, floatOne Float32, floatTwo Float32) frontend.Variable {
+// func (rf *RealNumberField[T]) add(k int, p int, floatOne Float32, floatTwo Float32) frontend.Variable {
 
-	mgn1 := rf.api.Add(floatOne.Mantissa, leftShift(rf.api, floatOne.Exponent, p+1, k))
-	mgn2 := rf.api.Add(floatTwo.Mantissa, leftShift(rf.api, floatTwo.Exponent, p+1, k))
+// 	mgn1 := rf.api.Add(floatOne.Mantissa, leftShift(rf.api, floatOne.Exponent, p+1, k))
+// 	mgn2 := rf.api.Add(floatTwo.Mantissa, leftShift(rf.api, floatTwo.Exponent, p+1, k))
 
-	check := rf.api.IsZero(rf.api.Sub(rf.api.Cmp(mgn1, mgn2), 1))
+// 	check := rf.api.IsZero(rf.api.Sub(rf.api.Cmp(mgn1, mgn2), 1))
 
-	alphaE := rf.api.Select(check, floatOne.Exponent, floatTwo.Exponent)
-	alphaM := rf.api.Select(check, floatOne.Mantissa, floatTwo.Mantissa)
-	betaE := rf.api.Select(check, floatTwo.Exponent, floatOne.Exponent)
-	betaM := rf.api.Select(check, floatTwo.Mantissa, floatOne.Mantissa)
+// 	alphaE := rf.api.Select(check, floatOne.Exponent, floatTwo.Exponent)
+// 	alphaM := rf.api.Select(check, floatOne.Mantissa, floatTwo.Mantissa)
+// 	betaE := rf.api.Select(check, floatTwo.Exponent, floatOne.Exponent)
+// 	betaM := rf.api.Select(check, floatTwo.Mantissa, floatOne.Mantissa)
 
-	diff := rf.api.Sub(alphaE, betaE)
+// 	diff := rf.api.Sub(alphaE, betaE)
 
-	result, err := rf.api.Compiler().NewHint(LeftShiftHint, 1, alphaM, diff)
-	if err != nil {
-		panic(err)
-	}
+// 	result, err := rf.api.Compiler().NewHint(LeftShiftHint, 1, alphaM, diff)
+// 	if err != nil {
+// 		panic(err)
+// 	}
 
-	alphaM = result[0]
+// 	alphaM = result[0]
 
-	m := rf.api.Add(alphaM, betaM)
+// 	m := rf.api.Add(alphaM, betaM)
 
-	normalized := normalize(rf.api, p, betaE, m)
+// 	normalized := normalize(rf.api, p, betaE, m)
 
-	rf.api.Println(alphaE, alphaM, betaE, betaM, diff, result, m, normalized)
+// 	rf.api.Println(alphaE, alphaM, betaE, betaM, diff, result, m, normalized)
 
-	return check
-}
+// 	return check
+// }
 
 // spaeter die funktion generisch machen und precision als konstante uebergeben
-func (rf *RealNumberField[T]) addOld(k int, p int, floatOne Float32, floatTwo Float32) [2]frontend.Variable {
+// func (rf *RealNumberField[T]) addOld(k int, p int, floatOne Float32, floatTwo Float32) [2]frontend.Variable {
 
-	// [1-bit | 23-bit mantissa | 8-bit exponent ]
+// 	// [1-bit | 23-bit mantissa | 8-bit exponent ]
 
-	// Assumes a normalized mantissa in range [2^p, 2^p+1) and 8-bit exponent as input
-	// TODO: if `e` is zero, then `m` must be zero
+// 	// Assumes a normalized mantissa in range [2^p, 2^p+1) and 8-bit exponent as input
+// 	// TODO: if `e` is zero, then `m` must be zero
 
-	mgn1 := rf.api.Add(floatOne.Mantissa, leftShift(rf.api, floatOne.Exponent, p+1, k))
-	mgn2 := rf.api.Add(floatTwo.Mantissa, leftShift(rf.api, floatTwo.Exponent, p+1, k))
+// 	mgn1 := rf.api.Add(floatOne.Mantissa, leftShift(rf.api, floatOne.Exponent, p+1, k))
+// 	mgn2 := rf.api.Add(floatTwo.Mantissa, leftShift(rf.api, floatTwo.Exponent, p+1, k))
 
-	check := rf.api.IsZero(rf.api.Sub(rf.api.Cmp(mgn1, mgn2), 1)) // Check if mgn1 > mgn2?
-	alphaE := rf.api.Select(check, floatOne.Exponent, floatTwo.Exponent)
-	alphaM := rf.api.Select(check, floatOne.Mantissa, floatTwo.Mantissa)
-	betaE := rf.api.Select(check, floatTwo.Exponent, floatOne.Exponent)
-	betaM := rf.api.Select(check, floatTwo.Mantissa, floatOne.Mantissa)
+// 	check := rf.api.IsZero(rf.api.Sub(rf.api.Cmp(mgn1, mgn2), 1)) // Check if mgn1 > mgn2?
+// 	alphaE := rf.api.Select(check, floatOne.Exponent, floatTwo.Exponent)
+// 	alphaM := rf.api.Select(check, floatOne.Mantissa, floatTwo.Mantissa)
+// 	betaE := rf.api.Select(check, floatTwo.Exponent, floatOne.Exponent)
+// 	betaM := rf.api.Select(check, floatTwo.Mantissa, floatOne.Mantissa)
 
-	diff := rf.api.Sub(alphaE, betaE)
+// 	diff := rf.api.Sub(alphaE, betaE)
 
-	// if Abfrage mit diff und theoretisch return?
-	result, err := rf.api.Compiler().NewHint(LeftShiftHint, 1, alphaM, diff)
-	if err != nil {
-		panic(err)
-	}
-	alphaM = result[0]
+// 	// if Abfrage mit diff und theoretisch return?
+// 	result, err := rf.api.Compiler().NewHint(LeftShiftHint, 1, alphaM, diff)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	alphaM = result[0]
 
-	m := rf.api.Add(alphaM, betaM)
+// 	m := rf.api.Add(alphaM, betaM)
 
-	normalized := normalize(rf.api, p, betaE, m)
-	return roundAndCheck(rf.api, p, normalized[0], normalized[1])
-}
+// 	normalized := normalize(rf.api, p, betaE, m)
+// 	return roundAndCheck(rf.api, p, normalized[0], normalized[1])
+// }
 
 // spaeter k (bit size of e), p und 2p+1 als variable uebergeben
-func roundAndCheck(api frontend.API, p int, e frontend.Variable, m frontend.Variable) [2]frontend.Variable {
+func roundAndCheck(api frontend.API, k int, Float Float32) Float32 {
 
-	var rounded [2]frontend.Variable
+	var rounded Float32
 
 	// Allgemeiner Fall:  if m >= ((2 ** (P+1)) - (2 ** (P-p-1))):
-	tmp := int(math.Pow(2, float64(2*p+2))) - int(math.Pow(2, float64(p)))
+	tmp := int(math.Pow(2, float64(2*Precision+2))) - int(math.Pow(2, float64(Precision)))
 	compareVal := frontend.Variable(tmp)
 
-	check := api.IsZero(api.Sub(api.Cmp(compareVal, m), 1)) // Check if 2^2p+2 - 2^p > m?
+	// Check if 2^2p+2 - 2^p > m?
+	check := api.IsZero(api.Sub(api.Cmp(compareVal, Float.Mantissa), 1))
 
 	// size checken fuer 32bit float und richtig angeben
-	roundedM := rightShift(api, api.Add(m, int(math.Pow(2, float64(p)))), p+1, 2*p+2)
+	roundedM := rightShift(api, api.Add(Float.Mantissa, int(math.Pow(2, float64(Precision)))), Precision+1, 2*Precision+2)
 
-	rounded[0] = api.Select(check, e, api.Add(e, 1))
-	rounded[1] = api.Select(check, roundedM, int(math.Pow(2, float64(p))))
+	rounded.Exponent = api.Select(check, Float.Exponent, api.Add(Float.Exponent, 1))
+	rounded.Mantissa = api.Select(check, roundedM, int(math.Pow(2, float64(Precision))))
 
 	return rounded
 }
 
 // spaeter k (bit size of e), p und 2p+1 als variable uebergeben
-func normalize(api frontend.API, p int, e frontend.Variable, m frontend.Variable) [2]frontend.Variable {
+func normalize(api frontend.API, p int, Float Float32) Float32 {
 
-	var normalized [2]frontend.Variable
+	var normalized Float32
 
-	ell := msnzb(api, m, 2*p+2)
+	ell := msnzb(api, Float.Mantissa, 2*p+2)
 
 	shiftM := api.Sub(2*p+1, ell)
 
-	result, err := api.Compiler().NewHint(LeftShiftHint, 1, m, shiftM)
+	result, err := api.Compiler().NewHint(LeftShiftHint, 1, Float.Mantissa, shiftM)
 	if err != nil {
 		panic(err)
 	}
-	normalized[1] = result[0]
+	normalized.Mantissa = result[0]
 
-	normalized[0] = api.Sub(api.Add(e, ell), p) // e = e + ell - p
+	normalized.Exponent = api.Sub(api.Add(Float.Exponent, ell), p) // e = e + ell - p
 
 	return normalized
 }

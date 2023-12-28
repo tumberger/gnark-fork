@@ -18,7 +18,7 @@ func GetHints() []solver.Hint {
 		LookupHint,
 		xorHint,
 		andHint,
-		shiftHint,
+		toBits,
 	}
 }
 
@@ -90,29 +90,25 @@ func andHint(_ *big.Int, inputs, outputs []*big.Int) error {
 	return nil
 }
 
-func shiftHint(_ *big.Int, inputs, outputs []*big.Int) error {
-	m := inputs[0] // The value of 'm'
-	e := inputs[1] // The value of 'e'
-	q := inputs[2] // The value of 'q'
-	R := inputs[3] // The value of 'R'
-
-	// Calculate 2^(q+1) - 2^(q-1)
-	two := big.NewInt(2)
-	twoQPlusOne := new(big.Int).Exp(two, new(big.Int).Add(q, big.NewInt(1)), nil)
-	twoQMinusOne := new(big.Int).Exp(two, new(big.Int).Sub(q, big.NewInt(1)), nil)
-	checkValue := new(big.Int).Sub(twoQPlusOne, twoQMinusOne)
-
-	// Check if m < checkValue
-	if m.Cmp(checkValue) < 0 {
-		// m = m >> R (mod 2^(q+1))
-		m.Rsh(m, uint(R.Int64())).Mod(m, twoQPlusOne)
-	} else {
-		// m = m >> R (q + 1); e = e + 1
-		m.Rsh(m, uint(R.Int64()+q.Int64()+1))
-		e.Add(e, big.NewInt(1))
+func toBits(m *big.Int, inputs []*big.Int, outputs []*big.Int) error {
+	if len(inputs) != 2 {
+		return fmt.Errorf("input must be 2 elements")
 	}
-
-	outputs[0].Set(m)
-	outputs[1].Set(e)
+	if !inputs[0].IsUint64() {
+		return fmt.Errorf("first input must be uint64")
+	}
+	nbBits := int(inputs[0].Uint64())
+	if len(outputs) != nbBits {
+		return fmt.Errorf("output must have the same number of elements as the number of bits")
+	}
+	if !inputs[1].IsUint64() {
+		return fmt.Errorf("input must be 64 bits")
+	}
+	base := big.NewInt(2)
+	tmp := new(big.Int).Set(inputs[1])
+	for i := 0; i < nbBits; i++ {
+		outputs[i].Mod(tmp, base)
+		tmp.Rsh(tmp, 1)
+	}
 	return nil
 }
